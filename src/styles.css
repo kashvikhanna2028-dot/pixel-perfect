@@ -173,7 +173,7 @@
 }
 
 .landing-hero-shade {
-  background: linear-gradient(90deg, color-mix(in oklch, var(--background) 90%, transparent), color-mix(in oklch, var(--background) 50%, transparent) 42%, transparent 78%);
+  background: color-mix(in oklch, var(--background) 56%, transparent);
 }
 
 @media (prefers-reduced-motion: no-preference) {
