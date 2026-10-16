@@ -378,7 +378,7 @@ function TrackerCard({ tracker, now, expired = false, logging, amount, onAmount,
   tracker: Tracker; now: Date; expired?: boolean; logging: boolean; amount: string; onAmount: (value: string) => void;
   onLog: () => void; onCustomLog: () => void; onOpenLog: () => void; onEdit: () => void; onDelete: () => void;
 }) {
-  const category = categories.find((item) => item.value === tracker.category) ?? categories[categories.length - 1]!;
+  const category = categories.find((item) => item.value === tracker.category) ?? { value: "other" as const, label: "Other", Icon: Layers3 };
   const Icon = category.Icon;
   const remaining = Math.max(0, tracker.total_amount - tracker.used_amount);
   const percent = Math.min(100, tracker.total_amount === 0 ? 0 : tracker.used_amount / tracker.total_amount * 100);
@@ -452,6 +452,17 @@ export function TrackerEditorPage({ trackerId }: { trackerId?: string }) {
     });
     return () => { alive = false; };
   }, [trackerId, navigate]);
+
+  useEffect(() => {
+    if (trackerId) return;
+    let alive = true;
+    void supabase.auth.getUser().then(async ({ data }) => {
+      if (!data.user) return;
+      const { data: profile } = await supabase.from("profiles").select("timezone").eq("user_id", data.user.id).maybeSingle();
+      if (alive && profile?.timezone) setForm((old) => ({ ...old, timezone: profile.timezone }));
+    });
+    return () => { alive = false; };
+  }, [trackerId]);
 
   function applyPreset(name: string) {
     setPreset(name);
