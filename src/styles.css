@@ -169,17 +169,30 @@
     font-family: var(--font-body-family);
   }
 
-  h1, h2, h3, h4 { font-family: var(--font-display-family); }
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display-family);
+  }
 }
 
 .landing-hero-shade {
-  background: linear-gradient(90deg, color-mix(in oklch, var(--background) 96%, transparent), color-mix(in oklch, var(--background) 82%, transparent) 55%, color-mix(in oklch, var(--background) 28%, transparent));
+  background: color-mix(in oklch, var(--background) 56%, transparent);
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .radar-enter { animation: radar-enter 320ms ease-out both; }
+  .radar-enter {
+    animation: radar-enter 320ms ease-out both;
+  }
   @keyframes radar-enter {
-    from { opacity: 0; transform: translateY(8px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 }
