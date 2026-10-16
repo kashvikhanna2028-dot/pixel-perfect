@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { dateTimeFieldToIso, isoToDateTimeFields, nextResetAt, unusedValue, urgencyFor } from "@/lib/expiry-radar";
+import {
+  dateTimeFieldToIso,
+  isoToDateTimeFields,
+  nextResetAt,
+  unusedValue,
+  urgencyFor,
+} from "@/lib/expiry-radar";
 
 describe("Expiry Radar calculations", () => {
   it("calculates daily resets in the selected time zone", () => {
@@ -25,11 +31,16 @@ describe("Expiry Radar calculations", () => {
   });
 
   it("stores one-time expiry using the selected IANA time zone", () => {
-    expect(dateTimeFieldToIso("2026-10-17", "09:00", "America/Los_Angeles")).toBe("2026-10-17T16:00:00.000Z");
+    expect(dateTimeFieldToIso("2026-10-17", "09:00", "America/Los_Angeles")).toBe(
+      "2026-10-17T16:00:00.000Z",
+    );
   });
 
   it("shows an existing expiry date and time in its own time zone", () => {
-    expect(isoToDateTimeFields("2026-10-17T16:00:00.000Z", "America/Los_Angeles")).toEqual({ date: "2026-10-17", time: "09:00" });
+    expect(isoToDateTimeFields("2026-10-17T16:00:00.000Z", "America/Los_Angeles")).toEqual({
+      date: "2026-10-17",
+      time: "09:00",
+    });
   });
 
   it("marks a mostly unused allowance expiring within 48 hours urgent", () => {

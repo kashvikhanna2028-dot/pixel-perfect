@@ -1,12 +1,6 @@
 export type ResetType = "one_time" | "daily" | "weekly" | "monthly";
 export type TrackerCategory =
-  | "llm_credits"
-  | "api_quota"
-  | "free_minutes"
-  | "gym_pass"
-  | "coupon"
-  | "free_trial"
-  | "other";
+  "llm_credits" | "api_quota" | "free_minutes" | "gym_pass" | "coupon" | "free_trial" | "other";
 
 export type Tracker = {
   id: string;
@@ -46,7 +40,15 @@ const dateParts = (date: Date, timeZone: string) => {
   };
 };
 
-const weekdayNumber: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+const weekdayNumber: Record<string, number> = {
+  Sun: 0,
+  Mon: 1,
+  Tue: 2,
+  Wed: 3,
+  Thu: 4,
+  Fri: 5,
+  Sat: 6,
+};
 
 /** Turns a wall-clock time in an IANA time zone into its corresponding instant. */
 export function zonedDateTime(
@@ -123,17 +125,27 @@ export function nextResetAt(
     return result;
   }
 
-  const targetDay = Math.min(resetDay ?? local.day, new Date(Date.UTC(local.year, local.month, 0)).getUTCDate());
+  const targetDay = Math.min(
+    resetDay ?? local.day,
+    new Date(Date.UTC(local.year, local.month, 0)).getUTCDate(),
+  );
   let result = candidateForDate(new Date(Date.UTC(local.year, local.month - 1, targetDay)));
   if (result.getTime() <= now.getTime()) {
     const nextMonth = new Date(Date.UTC(local.year, local.month, 1));
-    const day = Math.min(resetDay ?? targetDay, new Date(Date.UTC(nextMonth.getUTCFullYear(), nextMonth.getUTCMonth() + 1, 0)).getUTCDate());
-    result = candidateForDate(new Date(Date.UTC(nextMonth.getUTCFullYear(), nextMonth.getUTCMonth(), day)));
+    const day = Math.min(
+      resetDay ?? targetDay,
+      new Date(Date.UTC(nextMonth.getUTCFullYear(), nextMonth.getUTCMonth() + 1, 0)).getUTCDate(),
+    );
+    result = candidateForDate(
+      new Date(Date.UTC(nextMonth.getUTCFullYear(), nextMonth.getUTCMonth(), day)),
+    );
   }
   return result;
 }
 
-export function unusedValue(tracker: Pick<Tracker, "cost_value" | "total_amount" | "used_amount">): number {
+export function unusedValue(
+  tracker: Pick<Tracker, "cost_value" | "total_amount" | "used_amount">,
+): number {
   if (tracker.cost_value === null || tracker.total_amount <= 0) return 0;
   return Math.max(0, tracker.cost_value * (1 - tracker.used_amount / tracker.total_amount));
 }
@@ -157,14 +169,26 @@ export function dateTimeFieldToIso(date: string, time: string, timeZone: string)
   if (!date) return null;
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
   const [hour = 0, minute = 0] = time.split(":").map(Number);
-  if (!match || !Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+  if (
+    !match ||
+    !Number.isInteger(hour) ||
+    !Number.isInteger(minute) ||
+    hour < 0 ||
+    hour > 23 ||
+    minute < 0 ||
+    minute > 59
+  )
+    return null;
   const [, year, month, day] = match;
   if (!year || !month || !day) return null;
   const parsed = zonedDateTime(Number(year), Number(month), Number(day), hour, minute, timeZone);
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 }
 
-export function isoToDateTimeFields(isoDate: string, timeZone: string): { date: string; time: string } {
+export function isoToDateTimeFields(
+  isoDate: string,
+  timeZone: string,
+): { date: string; time: string } {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone,
     year: "numeric",
@@ -175,7 +199,10 @@ export function isoToDateTimeFields(isoDate: string, timeZone: string): { date: 
     hourCycle: "h23",
   }).formatToParts(new Date(isoDate));
   const part = (type: string) => parts.find((entry) => entry.type === type)?.value ?? "00";
-  return { date: `${part("year")}-${part("month")}-${part("day")}`, time: `${part("hour")}:${part("minute")}` };
+  return {
+    date: `${part("year")}-${part("month")}-${part("day")}`,
+    time: `${part("hour")}:${part("minute")}`,
+  };
 }
 
 export function urgencyFor(deadline: Date, now: Date, lotsUnused: boolean) {

@@ -169,7 +169,12 @@
     font-family: var(--font-body-family);
   }
 
-  h1, h2, h3, h4 { font-family: var(--font-display-family); }
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display-family);
+  }
 }
 
 .landing-hero-shade {
@@ -177,9 +182,17 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .radar-enter { animation: radar-enter 320ms ease-out both; }
+  .radar-enter {
+    animation: radar-enter 320ms ease-out both;
+  }
   @keyframes radar-enter {
-    from { opacity: 0; transform: translateY(8px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 }
