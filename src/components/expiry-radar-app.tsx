@@ -15,7 +15,7 @@ import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import {
-  dateTimeFieldToIso, formatCountdown, isUnused, nextResetAt, type ResetType, type Tracker, type TrackerCategory,
+  dateTimeFieldToIso, formatCountdown, isUnused, isoToDateTimeFields, nextResetAt, type ResetType, type Tracker, type TrackerCategory,
   type TrackerDraft, unusedValue, urgencyFor,
 } from "@/lib/expiry-radar";
 import editorialStillLife from "@/assets/expiry-radar-still-life.jpg";
@@ -384,7 +384,7 @@ function TrackerCard({ tracker, now, expired = false, logging, amount, onAmount,
   const percent = Math.min(100, tracker.total_amount === 0 ? 0 : tracker.used_amount / tracker.total_amount * 100);
   const deadlineValue = tracker.reset_type === "one_time" ? tracker.expires_at : tracker.next_reset_at;
   const deadline = deadlineValue ? new Date(deadlineValue) : null;
-  const tone = expired ? "urgent" : deadline ? urgencyFor(deadline, now, isUnused(tracker)) : "calm";
+  const tone = expired ? "urgent" : deadline ? urgencyFor(deadline, now, isUnused(tracker) && remaining >= tracker.total_amount / 2) : "calm";
   const toneClasses = tone === "urgent" ? "text-urgency" : tone === "warning" ? "text-warning-foreground" : "text-success";
   const usedPercent = Math.round(percent);
   const nudge = tracker.used_amount >= tracker.total_amount ? "Fully used — nothing left to waste." : expired ? `${numberFormat.format(remaining)} ${unitLabel(tracker.unit)} went unused.` : deadline && (deadline.getTime() - now.getTime()) < 48 * 3_600_000 ? `You’ve used ${usedPercent}%. Nearly up — put the rest to use.` : deadline && (deadline.getTime() - now.getTime()) < 7 * 86_400_000 ? `You’ve used ${usedPercent}%. A few days left — make time to use it.` : `You’ve used ${usedPercent}%. There’s time to make the most of it.`;
@@ -448,7 +448,8 @@ export function TrackerEditorPage({ trackerId }: { trackerId?: string }) {
     void supabase.from("trackers").select("*").eq("id", trackerId).maybeSingle().then(({ data, error: loadError }) => {
       if (!alive) return;
       if (loadError || !data) { toast.error("That tracker could not be found."); void navigate({ to: "/dashboard" }); return; }
-      setForm({ name: data.name, category: data.category as TrackerCategory, unit: data.unit, total_amount: String(data.total_amount), used_amount: String(data.used_amount), reset_type: data.reset_type as ResetType, reset_day: data.reset_day === null ? "" : String(data.reset_day), expires_at: data.expires_at ? data.expires_at.slice(0, 10) : "", reset_time: data.reset_time.slice(0, 5), timezone: data.timezone, cost_value: data.cost_value === null ? "" : String(data.cost_value), notes: data.notes });
+      const dateFields = data.expires_at ? isoToDateTimeFields(data.expires_at, data.timezone) : { date: "", time: data.reset_time.slice(0, 5) };
+      setForm({ name: data.name, category: data.category as TrackerCategory, unit: data.unit, total_amount: String(data.total_amount), used_amount: String(data.used_amount), reset_type: data.reset_type as ResetType, reset_day: data.reset_day === null ? "" : String(data.reset_day), expires_at: dateFields.date, reset_time: dateFields.time, timezone: data.timezone, cost_value: data.cost_value === null ? "" : String(data.cost_value), notes: data.notes });
       setLoading(false);
     });
     return () => { alive = false; };

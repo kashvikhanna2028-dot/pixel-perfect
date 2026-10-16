@@ -164,9 +164,23 @@ export function dateTimeFieldToIso(date: string, time: string, timeZone: string)
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 }
 
-export function urgencyFor(deadline: Date, now: Date, unused: boolean) {
+export function isoToDateTimeFields(isoDate: string, timeZone: string): { date: string; time: string } {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(isoDate));
+  const part = (type: string) => parts.find((entry) => entry.type === type)?.value ?? "00";
+  return { date: `${part("year")}-${part("month")}-${part("day")}`, time: `${part("hour")}:${part("minute")}` };
+}
+
+export function urgencyFor(deadline: Date, now: Date, lotsUnused: boolean) {
   const hoursLeft = (deadline.getTime() - now.getTime()) / 3_600_000;
-  if (unused && hoursLeft < 48) return "urgent" as const;
+  if (lotsUnused && hoursLeft < 48) return "urgent" as const;
   if (hoursLeft <= 24 * 7) return "warning" as const;
   return "calm" as const;
 }
