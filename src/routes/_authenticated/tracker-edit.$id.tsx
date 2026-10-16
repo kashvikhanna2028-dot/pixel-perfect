@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { TrackerEditorPage } from "@/components/expiry-radar-app";
 
 export const Route = createFileRoute("/_authenticated/tracker-edit/$id")({
+  component: TrackerEditRoute,
   head: () => ({
     meta: [
       { title: "Edit Tracker — Expiry Radar" },
@@ -18,8 +19,9 @@ export const Route = createFileRoute("/_authenticated/tracker-edit/$id")({
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  component: () => {
-    const { id } = Route.useParams();
-    return <TrackerEditorPage trackerId={id} />;
-  },
 });
+
+function TrackerEditRoute() {
+  const { id } = Route.useParams();
+  return <TrackerEditorPage trackerId={id} />;
+}
