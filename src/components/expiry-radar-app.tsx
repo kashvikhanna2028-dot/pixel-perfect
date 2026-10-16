@@ -319,14 +319,8 @@ export function DashboardPage() {
     if (!userId || !Number.isFinite(amountValue) || amountValue <= 0 || amountValue > tracker.total_amount - tracker.used_amount) {
       toast.error("Enter an amount that fits within the remaining allowance."); return;
     }
-    const updatedUsed = tracker.used_amount + amountValue;
-    const { error: updateError } = await supabase.from("trackers").update({ used_amount: updatedUsed }).eq("id", tracker.id).eq("user_id", userId);
-    if (updateError) { toast.error("Usage couldn’t be updated. Please try again."); return; }
     const { error: logError } = await supabase.from("usage_logs").insert({ tracker_id: tracker.id, user_id: userId, amount: amountValue });
-    if (logError) {
-      await supabase.from("trackers").update({ used_amount: tracker.used_amount }).eq("id", tracker.id).eq("user_id", userId);
-      toast.error("Your usage history couldn’t be saved. Please try again."); return;
-    }
+    if (logError) { toast.error("Your usage couldn’t be saved. Check the remaining amount and try again."); return; }
     toast.success(`${numberFormat.format(amountValue)} ${unitLabel(tracker.unit)} logged.`);
     setLogging(null); setAmount("1"); await reload();
   }
