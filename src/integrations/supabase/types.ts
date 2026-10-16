@@ -14,7 +14,119 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      profiles: {
+        Row: {
+          created_at: string
+          display_name: string
+          timezone: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string
+          timezone?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string
+          timezone?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      trackers: {
+        Row: {
+          category: string
+          cost_value: number | null
+          created_at: string
+          expires_at: string | null
+          id: string
+          name: string
+          next_reset_at: string | null
+          notes: string
+          reset_day: number | null
+          reset_time: string
+          reset_type: string
+          timezone: string
+          total_amount: number
+          unit: string
+          used_amount: number
+          user_id: string
+        }
+        Insert: {
+          category: string
+          cost_value?: number | null
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          name: string
+          next_reset_at?: string | null
+          notes?: string
+          reset_day?: number | null
+          reset_time?: string
+          reset_type: string
+          timezone?: string
+          total_amount: number
+          unit?: string
+          used_amount?: number
+          user_id: string
+        }
+        Update: {
+          category?: string
+          cost_value?: number | null
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          name?: string
+          next_reset_at?: string | null
+          notes?: string
+          reset_day?: number | null
+          reset_time?: string
+          reset_type?: string
+          timezone?: string
+          total_amount?: number
+          unit?: string
+          used_amount?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      usage_logs: {
+        Row: {
+          amount: number
+          id: string
+          logged_at: string
+          tracker_id: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          id?: string
+          logged_at?: string
+          tracker_id: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          id?: string
+          logged_at?: string
+          tracker_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "usage_logs_tracker_id_fkey"
+            columns: ["tracker_id"]
+            isOneToOne: false
+            referencedRelation: "trackers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
