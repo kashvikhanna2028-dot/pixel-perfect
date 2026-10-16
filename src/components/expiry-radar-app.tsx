@@ -15,7 +15,7 @@ import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import {
-  formatCountdown, isUnused, nextResetAt, type ResetType, type Tracker, type TrackerCategory,
+  dateTimeFieldToIso, formatCountdown, isUnused, nextResetAt, type ResetType, type Tracker, type TrackerCategory,
   type TrackerDraft, unusedValue, urgencyFor,
 } from "@/lib/expiry-radar";
 import editorialStillLife from "@/assets/expiry-radar-still-life.jpg";
@@ -386,7 +386,8 @@ function TrackerCard({ tracker, now, expired = false, logging, amount, onAmount,
   const deadline = deadlineValue ? new Date(deadlineValue) : null;
   const tone = expired ? "urgent" : deadline ? urgencyFor(deadline, now, isUnused(tracker)) : "calm";
   const toneClasses = tone === "urgent" ? "text-urgency" : tone === "warning" ? "text-warning-foreground" : "text-success";
-  const nudge = tracker.used_amount >= tracker.total_amount ? "Fully used — nothing left to waste." : expired ? `${numberFormat.format(remaining)} ${unitLabel(tracker.unit)} went unused.` : deadline && (deadline.getTime() - now.getTime()) < 48 * 3_600_000 ? "Nearly up. Put the rest to use." : deadline && (deadline.getTime() - now.getTime()) < 7 * 86_400_000 ? "A few days left. Make time to use it." : "You’ve got time. Keep it on your radar.";
+  const usedPercent = Math.round(percent);
+  const nudge = tracker.used_amount >= tracker.total_amount ? "Fully used — nothing left to waste." : expired ? `${numberFormat.format(remaining)} ${unitLabel(tracker.unit)} went unused.` : deadline && (deadline.getTime() - now.getTime()) < 48 * 3_600_000 ? `You’ve used ${usedPercent}%. Nearly up — put the rest to use.` : deadline && (deadline.getTime() - now.getTime()) < 7 * 86_400_000 ? `You’ve used ${usedPercent}%. A few days left — make time to use it.` : `You’ve used ${usedPercent}%. There’s time to make the most of it.`;
   const menu = [{ label: "Edit tracker", Icon: ExternalLink, action: onEdit }, { label: "Delete tracker", Icon: Trash2, action: onDelete }];
   return <article className="rounded-lg border border-border bg-surface-raised p-4 sm:p-5">
     <div className="flex items-start justify-between gap-3">
@@ -474,7 +475,10 @@ export function TrackerEditorPage({ trackerId }: { trackerId?: string }) {
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError("");
-    const raw = { name: form.name, category: form.category, unit: form.unit, total_amount: form.total_amount, used_amount: form.used_amount, reset_type: form.reset_type, reset_day: form.reset_day === "" ? null : Number(form.reset_day), expires_at: form.expires_at ? new Date(`${form.expires_at}T${form.reset_time}:00`).toISOString() : null, reset_time: form.reset_time, timezone: form.timezone, cost_value: form.cost_value === "" ? null : Number(form.cost_value), notes: form.notes };
+    let expiresAt: string | null = null;
+    try { expiresAt = dateTimeFieldToIso(form.expires_at, form.reset_time, form.timezone); }
+    catch { expiresAt = null; }
+    const raw = { name: form.name, category: form.category, unit: form.unit, total_amount: form.total_amount, used_amount: form.used_amount, reset_type: form.reset_type, reset_day: form.reset_day === "" ? null : Number(form.reset_day), expires_at: expiresAt, reset_time: form.reset_time, timezone: form.timezone, cost_value: form.cost_value === "" ? null : Number(form.cost_value), notes: form.notes };
     const parsed = trackerSchema.safeParse(raw);
     if (!parsed.success) { setError(parsed.error.issues[0]?.message ?? "Check your entries and try again."); return; }
     const { data: authData } = await supabase.auth.getUser();

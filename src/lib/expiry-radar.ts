@@ -153,6 +153,17 @@ export function formatCountdown(deadline: Date, now: Date): string {
   return `${minutes}m`;
 }
 
+export function dateTimeFieldToIso(date: string, time: string, timeZone: string): string | null {
+  if (!date) return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  const [hour = 0, minute = 0] = time.split(":").map(Number);
+  if (!match || !Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+  const [, year, month, day] = match;
+  if (!year || !month || !day) return null;
+  const parsed = zonedDateTime(Number(year), Number(month), Number(day), hour, minute, timeZone);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
 export function urgencyFor(deadline: Date, now: Date, unused: boolean) {
   const hoursLeft = (deadline.getTime() - now.getTime()) / 3_600_000;
   if (unused && hoursLeft < 48) return "urgent" as const;
