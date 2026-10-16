@@ -15,6 +15,13 @@
       "when": 1792151555831,
       "tag": "0001_apply_usage_logs_atomically",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792151746080,
+      "tag": "0002_restrict_profile_trigger_function",
+      "breakpoints": true
     }
   ]
 }
