@@ -169,8 +169,8 @@ export function AuthPage() {
         <h1 className="mt-2 text-3xl font-semibold">{mode === "signup" ? "Make room for more." : "Welcome back."}</h1>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">{mode === "signup" ? "Create an account and keep every allowance in view." : "Sign in to pick up right where you left off."}</p>
         <div className="mt-7 grid grid-cols-2 gap-1 border-b border-border text-sm">
-          <button type="button" onClick={() => { setMode("signup"); setMessage(""); }} className={`border-b-2 pb-3 font-medium ${mode === "signup" ? "border-primary text-foreground" : "border-transparent text-muted-foreground"}`}>Create account</button>
-          <button type="button" onClick={() => { setMode("login"); setMessage(""); }} className={`border-b-2 pb-3 font-medium ${mode === "login" ? "border-primary text-foreground" : "border-transparent text-muted-foreground"}`}>Log in</button>
+          <Button type="button" variant="ghost" aria-pressed={mode === "signup"} onClick={() => { setMode("signup"); setMessage(""); }} className={`h-auto justify-center rounded-none border-b-2 pb-3 font-medium hover:bg-transparent ${mode === "signup" ? "border-primary text-foreground" : "border-transparent text-muted-foreground"}`}>Create account</Button>
+          <Button type="button" variant="ghost" aria-pressed={mode === "login"} onClick={() => { setMode("login"); setMessage(""); }} className={`h-auto justify-center rounded-none border-b-2 pb-3 font-medium hover:bg-transparent ${mode === "login" ? "border-primary text-foreground" : "border-transparent text-muted-foreground"}`}>Log in</Button>
         </div>
         <form onSubmit={submit} className="mt-6 space-y-4">
           {mode === "signup" && <div className="space-y-2"><Label htmlFor="displayName">Your name</Label><Input id="displayName" autoComplete="name" value={displayName} onChange={(event) => setDisplayName(event.target.value)} maxLength={80} required /></div>}
