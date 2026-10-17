@@ -55,6 +55,7 @@ import {
 } from "@/lib/expiry-radar";
 import { SubscriptionNotificationBell, SubscriptionOverview } from "@/components/subscriptions";
 import { demoSubscriptions, currencies } from "@/lib/subscriptions";
+import { ReminderEmailSettings } from "@/components/reminder-email-settings";
 import { useQueryClient } from "@tanstack/react-query";
 import editorialStillLife from "@/assets/expiry-radar-still-life.jpg";
 
@@ -1761,7 +1762,7 @@ export function HistoryPage() {
 export function SettingsPage() {
   const queryClient = useQueryClient();
   const [demoBusy, setDemoBusy] = useState(false);
-  const [profile, setProfile] = useState({ display_name: "", timezone: currentTimeZone(), default_currency: "USD", renewal_reminder_days: 3 });
+  const [profile, setProfile] = useState({ display_name: "", timezone: currentTimeZone(), default_currency: "USD", renewal_reminder_days: 3, email_reminders_enabled: false });
   const [userId, setUserId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -1777,7 +1778,7 @@ export function SettingsPage() {
       if (!data.user) return;
       const { data: profileData } = await supabase
         .from("profiles")
-        .select("display_name, timezone, default_currency, renewal_reminder_days")
+        .select("display_name, timezone, default_currency, renewal_reminder_days, email_reminders_enabled")
         .eq("user_id", data.user.id)
         .maybeSingle();
       if (!alive) return;
@@ -1787,6 +1788,7 @@ export function SettingsPage() {
         timezone: profileData?.timezone ?? currentTimeZone(),
         default_currency: profileData?.default_currency ?? "USD",
         renewal_reminder_days: profileData?.renewal_reminder_days ?? 3,
+        email_reminders_enabled: profileData?.email_reminders_enabled ?? false,
       };
       setProfile(nextProfile);
       setDisplayName(nextProfile.display_name);
@@ -1814,6 +1816,7 @@ export function SettingsPage() {
         timezone: profile.timezone,
         default_currency: profile.default_currency,
         renewal_reminder_days: profile.renewal_reminder_days,
+        email_reminders_enabled: profile.email_reminders_enabled,
         updated_at: new Date().toISOString(),
       })
       .eq("user_id", userId);
@@ -2001,6 +2004,7 @@ export function SettingsPage() {
           </div>
           <div className="space-y-2"><Label htmlFor="default-currency">Default currency</Label><select id="default-currency" className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={profile.default_currency} onChange={event => setProfile({ ...profile, default_currency: event.target.value })}>{currencies.map(currency => <option key={currency}>{currency}</option>)}</select></div>
           <div className="space-y-2"><Label htmlFor="renewal-reminders">Remind before renewal</Label><select id="renewal-reminders" className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={profile.renewal_reminder_days} onChange={event => setProfile({ ...profile, renewal_reminder_days: Number(event.target.value) })}>{[1,3,7].map(days => <option key={days} value={days}>{days} {days === 1 ? "day" : "days"} before</option>)}</select></div>
+          <ReminderEmailSettings enabled={profile.email_reminders_enabled} onChange={email_reminders_enabled => setProfile({ ...profile, email_reminders_enabled })} />
         </div>
         <div className="mt-5 flex justify-end">
           <Button type="submit" disabled={saving}>
