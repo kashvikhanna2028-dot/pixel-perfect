@@ -77,7 +77,7 @@ export function SubscriptionsPage() {
   const timeline = renewalTimeline(active, today);
   const dueTotals = timeline.reduce<Record<string,number>>((a,item) => ({ ...a,[item.subscription.currency]: (a[item.subscription.currency] ?? 0) + item.amount }),{});
   const ranked = active.filter(s => !s.is_trial).map(s => ({ s, rating: data.ratings.find(r => r.subscription_id === s.id && r.month === month)?.rating ?? null })).sort((a,b) => (b.rating ?? 0) / Math.max(monthlyCost(b.s),1) - (a.rating ?? 0) / Math.max(monthlyCost(a.s),1));
-  const median = (values: number[]) => { const sorted = values.toSorted((a,b) => a-b); return sorted.length ? sorted[Math.floor(sorted.length / 2)] ?? 0 : 0; };
+  const median = (values: number[]) => { const sorted = [...values].sort((a,b) => a-b); return sorted.length ? sorted[Math.floor(sorted.length / 2)] ?? 0 : 0; };
   const flagged = ranked.filter(({s,rating}) => rating !== null && rating <= 2 && monthlyCost(s) >= median(active.filter(a => a.currency === s.currency && !a.is_trial).map(monthlyCost)));
   const duplicates = ['streaming','music'].map(c => ({ category: c, items: active.filter(s => s.category === c) })).filter(g => g.items.length > 1);
   async function update(s: Subscription, action: 'pause'|'cancel'|'delete'|'renew') {
