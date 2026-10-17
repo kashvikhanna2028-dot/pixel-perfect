@@ -1,0 +1,24 @@
+import { describe, expect, it } from 'vitest';
+import { advanceDate, currencyTotals, demoSubscriptions, monthlyCost, renewalTimeline, renewalUrgency, subscriptionSchema, subscriptionsCsv, type Subscription } from './subscriptions';
+const plan = (overrides: Partial<Subscription> = {}): Subscription => ({ id:'1',user_id:'u',name:'Netflix',category:'streaming',price:120,currency:'USD',billing_cycle:'monthly',custom_days:null,next_billing_date:'2026-10-20',start_date:'2026-09-20',is_trial:false,trial_ends_on:null,auto_renew:true,payment_method:'',shared_with:1,cancel_url:'',notes:'',status:'active',created_at:'2026-09-20',...overrides });
+describe('Subscription rules', () => {
+ it('uses yearly price divided by 12', () => expect(monthlyCost(plan({billing_cycle:'yearly'}))).toBe(10));
+ it('uses weekly price times 52 divided by 12', () => expect(monthlyCost(plan({price:12,billing_cycle:'weekly'}))).toBe(52));
+ it('uses quarterly price divided by 3', () => expect(monthlyCost(plan({billing_cycle:'quarterly'}))).toBe(40));
+ it('uses a daily equivalent for custom cycles', () => expect(monthlyCost(plan({price:12,billing_cycle:'custom_days',custom_days:365}))).toBe(1));
+ it('shows the users share', () => expect(monthlyCost(plan({shared_with:2}))).toBe(60));
+ it('does not mix currencies or count trials and paused plans as current spending', () => expect(currencyTotals([plan(),plan({currency:'INR',price:500}),plan({status:'paused'}),plan({is_trial:true})])).toEqual({USD:120,INR:500}));
+ it('keeps monthly end-of-month anchor after February', () => { const feb=advanceDate('2027-01-31','monthly',null,'2027-01-31'); expect(feb).toBe('2027-02-28'); expect(advanceDate(feb,'monthly',null,'2027-01-31')).toBe('2027-03-31'); });
+ it('moves a leap-year annual renewal to February 28', () => expect(advanceDate('2024-02-29','yearly',null,'2024-02-29')).toBe('2025-02-28'));
+ it('advances weekly dates seven days', () => expect(advanceDate('2026-10-17','weekly',null,'2026-10-01')).toBe('2026-10-24'));
+ it('advances quarterly dates three months', () => expect(advanceDate('2026-10-17','quarterly',null,'2026-10-17')).toBe('2027-01-17'));
+ it('marks under 72 hours red in user timezone', () => expect(renewalUrgency('2026-10-20','Asia/Kolkata',new Date('2026-10-17T01:00:00Z'))).toBe('urgent'));
+ it('marks 3 to 7 days amber', () => expect(renewalUrgency('2026-10-20','UTC',new Date('2026-10-17T00:00:00Z'))).toBe('warning'));
+ it('marks more than 7 days green', () => expect(renewalUrgency('2026-10-25','UTC',new Date('2026-10-17T00:00:00Z'))).toBe('calm'));
+ it('includes every weekly charge in the next 30 days', () => expect(renewalTimeline([plan({billing_cycle:'weekly',next_billing_date:'2026-10-18'})],'2026-10-17').map(i => i.date)).toEqual(['2026-10-18','2026-10-25','2026-11-01','2026-11-08','2026-11-15']));
+ it('requires an end date for a free trial', () => expect(subscriptionSchema.safeParse(plan({is_trial:true})).success).toBe(false));
+ it('requires positive custom days', () => expect(subscriptionSchema.safeParse(plan({billing_cycle:'custom_days',custom_days:0})).success).toBe(false));
+ it('rejects non-http cancel links', () => expect(subscriptionSchema.safeParse(plan({cancel_url:'javascript:alert(1)'})).success).toBe(false));
+ it('provides six sample subscriptions including a trial and yearly plan', () => { const demo = demoSubscriptions('u','INR','Asia/Kolkata'); expect(demo).toHaveLength(6); expect(demo.filter(s => s.is_trial)).toHaveLength(1); expect(demo.filter(s => s.billing_cycle === 'yearly')).toHaveLength(2); expect(demo.every(s => s.currency === 'INR')).toBe(true); });
+ it('escapes spreadsheet formulas in CSV', () => expect(subscriptionsCsv([plan({name:'=1+1'})])).toContain('"\'=1+1"'));
+});

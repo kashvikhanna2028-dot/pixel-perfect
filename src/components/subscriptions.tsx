@@ -146,8 +146,6 @@ export function SubscriptionEditor({ subscriptionId }: { subscriptionId?: string
     toast.success(subscriptionId ? 'Subscription updated.' : 'Subscription added.');
     await refresh(); await navigate({to:'/subscriptions'});
   }
-  function Field({ name, title, children }: { name: string; title: string; children: React.ReactNode }) { return <div className="space-y-2"><Label htmlFor={name}>{title}</Label>{children}{errors[name] && <p role="alert" className="text-xs text-destructive">{errors[name]}</p>}</div>; }
-  // Keep field wrapper identity outside input trees: render a static helper below.
   const field = (name: string,title: string,children: React.ReactNode) => <div className="space-y-2"><Label htmlFor={name}>{title}</Label>{children}{errors[name] && <p role="alert" className="text-xs text-destructive">{errors[name]}</p>}</div>;
   return <section className="mx-auto max-w-3xl radar-enter"><Button asChild variant="link" className="mb-3 px-0"><Link to="/subscriptions">← Subscriptions</Link></Button><h1 className="text-3xl font-semibold">{subscriptionId ? 'Edit subscription' : 'Add subscription'}</h1><form className="mt-6 space-y-6" onSubmit={e => void save(e)} noValidate>
     {!subscriptionId && field('preset','Service',<select id="preset" className={selectClass} value={preset} onChange={e => { setPreset(e.target.value); const p = presets.find(p => p[0] === e.target.value); if(p) { setForm(old => ({...old,name:p[0],category:p[1],billing_cycle:p[2],next_billing_date:advanceDate(old.start_date,p[2],null,old.start_date),cancel_url:p[3]})); setPrice(''); } }}><option value="custom">Custom subscription</option>{presets.map(p => <option key={p[0]}>{p[0]}</option>)}</select>)}

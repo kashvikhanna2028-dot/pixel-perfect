@@ -53,6 +53,9 @@ import {
   unusedValue,
   urgencyFor,
 } from "@/lib/expiry-radar";
+import { SubscriptionNotificationBell, SubscriptionOverview } from "@/components/subscriptions";
+import { demoSubscriptions, currencies } from "@/lib/subscriptions";
+import { useQueryClient } from "@tanstack/react-query";
 import editorialStillLife from "@/assets/expiry-radar-still-life.jpg";
 
 const categories: { value: TrackerCategory; label: string; Icon: typeof Layers3 }[] = [
@@ -545,6 +548,7 @@ export function ProtectedLayout() {
 
   const navItems = [
     { to: "/dashboard" as const, label: "My radar", Icon: Radar },
+    { to: "/subscriptions" as const, label: "Subscriptions", Icon: Wallet },
     { to: "/history" as const, label: "Usage history", Icon: History },
     { to: "/settings" as const, label: "Settings", Icon: Settings2 },
   ];
@@ -591,6 +595,7 @@ export function ProtectedLayout() {
             A little more use from what’s already yours.
           </p>
           <div className="flex items-center gap-2 sm:gap-3">
+            <SubscriptionNotificationBell />
             <Button
               type="button"
               variant="ghost"
@@ -707,8 +712,8 @@ export function DashboardPage() {
   );
   const atRisk = active.filter(
     (item) =>
-      item.next_reset_at &&
-      new Date(item.next_reset_at).getTime() - now.getTime() <= 7 * 86_400_000 &&
+      (item.next_reset_at || item.expires_at) &&
+      new Date(item.next_reset_at ?? item.expires_at ?? "").getTime() - now.getTime() <= 7 * 86_400_000 &&
       isUnused(item),
   );
   const riskValue = atRisk.reduce((sum, item) => sum + unusedValue(item), 0);
@@ -778,6 +783,7 @@ export function DashboardPage() {
           <Plus /> Add a tracker
         </Button>
       </section>
+      <SubscriptionOverview trackersAtRisk={atRisk.length} />
       <section
         aria-label="At risk summary"
         className="relative grid gap-5 overflow-hidden rounded-lg border border-border bg-surface px-5 py-5 sm:grid-cols-[1fr_auto] sm:items-center sm:px-7"
@@ -1753,7 +1759,9 @@ export function HistoryPage() {
 }
 
 export function SettingsPage() {
-  const [profile, setProfile] = useState({ display_name: "", timezone: currentTimeZone() });
+  const queryClient = useQueryClient();
+  const [demoBusy, setDemoBusy] = useState(false);
+  const [profile, setProfile] = useState({ display_name: "", timezone: currentTimeZone(), default_currency: "USD", renewal_reminder_days: 3 });
   const [userId, setUserId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -1769,7 +1777,7 @@ export function SettingsPage() {
       if (!data.user) return;
       const { data: profileData } = await supabase
         .from("profiles")
-        .select("display_name, timezone")
+        .select("display_name, timezone, default_currency, renewal_reminder_days")
         .eq("user_id", data.user.id)
         .maybeSingle();
       if (!alive) return;
@@ -1777,6 +1785,8 @@ export function SettingsPage() {
       const nextProfile = {
         display_name: profileData?.display_name ?? data.user.email?.split("@")[0] ?? "",
         timezone: profileData?.timezone ?? currentTimeZone(),
+        default_currency: profileData?.default_currency ?? "USD",
+        renewal_reminder_days: profileData?.renewal_reminder_days ?? 3,
       };
       setProfile(nextProfile);
       setDisplayName(nextProfile.display_name);
@@ -1795,12 +1805,15 @@ export function SettingsPage() {
       toast.error("Add a name between 1 and 80 characters.");
       return;
     }
+    try { new Intl.DateTimeFormat("en", { timeZone: profile.timezone }); } catch { toast.error("Choose a valid time zone."); return; }
     setSaving(true);
     const { error } = await supabase
       .from("profiles")
       .update({
         display_name: name,
         timezone: profile.timezone,
+        default_currency: profile.default_currency,
+        renewal_reminder_days: profile.renewal_reminder_days,
         updated_at: new Date().toISOString(),
       })
       .eq("user_id", userId);
@@ -1808,12 +1821,14 @@ export function SettingsPage() {
     if (error) toast.error("Your settings couldn’t be saved.");
     else {
       setProfile({ ...profile, display_name: name });
+      await queryClient.invalidateQueries({ queryKey: ["subscriptions"] });
       toast.success("Settings saved.");
     }
   }
 
   async function loadDemo() {
-    if (!userId) return;
+    if (!userId || demoBusy) return;
+    setDemoBusy(true);
     const tz = profile.timezone;
     const recurring = (resetType: ResetType, resetDay: number | null, time: string) =>
       nextResetAt(resetType, resetDay, time, tz, new Date())?.toISOString() ?? null;
@@ -1917,7 +1932,12 @@ export function SettingsPage() {
     ];
     const { error } = await supabase.from("trackers").insert(samples);
     if (error) toast.error("Demo trackers couldn’t be added.");
-    else toast.success("Six demo trackers added.");
+    else {
+      const { error: subscriptionError } = await supabase.from("subscriptions").insert(demoSubscriptions(userId, profile.default_currency, profile.timezone));
+      if (subscriptionError) toast.error("Trackers added, but demo subscriptions could not be added. Try again shortly.");
+      else { await queryClient.invalidateQueries({ queryKey: ["subscriptions"] }); toast.success("Six demo trackers and six sample subscriptions added."); }
+    }
+    setDemoBusy(false);
   }
 
   async function deleteAll() {
@@ -1979,6 +1999,8 @@ export function SettingsPage() {
                 ))}
             </select>
           </div>
+          <div className="space-y-2"><Label htmlFor="default-currency">Default currency</Label><select id="default-currency" className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={profile.default_currency} onChange={event => setProfile({ ...profile, default_currency: event.target.value })}>{currencies.map(currency => <option key={currency}>{currency}</option>)}</select></div>
+          <div className="space-y-2"><Label htmlFor="renewal-reminders">Remind before renewal</Label><select id="renewal-reminders" className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={profile.renewal_reminder_days} onChange={event => setProfile({ ...profile, renewal_reminder_days: Number(event.target.value) })}>{[1,3,7].map(days => <option key={days} value={days}>{days} {days === 1 ? "day" : "days"} before</option>)}</select></div>
         </div>
         <div className="mt-5 flex justify-end">
           <Button type="submit" disabled={saving}>
@@ -1990,10 +2012,10 @@ export function SettingsPage() {
       <div className="mt-5 rounded-lg border border-border bg-surface-raised p-5 sm:p-6">
         <h2 className="text-lg font-semibold">Try a filled-in radar</h2>
         <p className="mt-1 max-w-xl text-sm leading-6 text-muted-foreground">
-          Add six realistic sample trackers so you can see how different reset schedules look.
+          Add six sample trackers and six sample subscriptions, including a free trial and yearly plans.
           Samples are added alongside anything already here.
         </p>
-        <Button variant="outline" className="mt-4" onClick={() => void loadDemo()}>
+        <Button variant="outline" className="mt-4" disabled={demoBusy} onClick={() => void loadDemo()}>
           <Sparkles /> Load demo data
         </Button>
       </div>

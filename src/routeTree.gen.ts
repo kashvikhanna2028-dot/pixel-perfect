@@ -15,7 +15,10 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticated/history'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
+import { Route as AuthenticatedSubscriptionNewRouteImport } from './routes/_authenticated/subscription-new'
+import { Route as AuthenticatedSubscriptionsRouteImport } from './routes/_authenticated/subscriptions'
 import { Route as AuthenticatedTrackerNewRouteImport } from './routes/_authenticated/tracker-new'
+import { Route as AuthenticatedSubscriptionEditIdRouteImport } from './routes/_authenticated/subscription-edit.$id'
 import { Route as AuthenticatedTrackerEditIdRouteImport } from './routes/_authenticated/tracker-edit.$id'
 
 const IndexRoute = IndexRouteImport.update({
@@ -47,11 +50,29 @@ const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedSubscriptionNewRoute =
+  AuthenticatedSubscriptionNewRouteImport.update({
+    id: '/subscription-new',
+    path: '/subscription-new',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSubscriptionsRoute =
+  AuthenticatedSubscriptionsRouteImport.update({
+    id: '/subscriptions',
+    path: '/subscriptions',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedTrackerNewRoute = AuthenticatedTrackerNewRouteImport.update({
   id: '/tracker-new',
   path: '/tracker-new',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedSubscriptionEditIdRoute =
+  AuthenticatedSubscriptionEditIdRouteImport.update({
+    id: '/subscription-edit/$id',
+    path: '/subscription-edit/$id',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedTrackerEditIdRoute =
   AuthenticatedTrackerEditIdRouteImport.update({
     id: '/tracker-edit/$id',
@@ -65,7 +86,10 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/history': typeof AuthenticatedHistoryRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/subscription-new': typeof AuthenticatedSubscriptionNewRoute
+  '/subscriptions': typeof AuthenticatedSubscriptionsRoute
   '/tracker-new': typeof AuthenticatedTrackerNewRoute
+  '/subscription-edit/$id': typeof AuthenticatedSubscriptionEditIdRoute
   '/tracker-edit/$id': typeof AuthenticatedTrackerEditIdRoute
 }
 export interface FileRoutesByTo {
@@ -74,7 +98,10 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/history': typeof AuthenticatedHistoryRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/subscription-new': typeof AuthenticatedSubscriptionNewRoute
+  '/subscriptions': typeof AuthenticatedSubscriptionsRoute
   '/tracker-new': typeof AuthenticatedTrackerNewRoute
+  '/subscription-edit/$id': typeof AuthenticatedSubscriptionEditIdRoute
   '/tracker-edit/$id': typeof AuthenticatedTrackerEditIdRoute
 }
 export interface FileRoutesById {
@@ -85,7 +112,10 @@ export interface FileRoutesById {
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/history': typeof AuthenticatedHistoryRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/_authenticated/subscription-new': typeof AuthenticatedSubscriptionNewRoute
+  '/_authenticated/subscriptions': typeof AuthenticatedSubscriptionsRoute
   '/_authenticated/tracker-new': typeof AuthenticatedTrackerNewRoute
+  '/_authenticated/subscription-edit/$id': typeof AuthenticatedSubscriptionEditIdRoute
   '/_authenticated/tracker-edit/$id': typeof AuthenticatedTrackerEditIdRoute
 }
 export interface FileRouteTypes {
@@ -96,7 +126,10 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/history'
     | '/settings'
+    | '/subscription-new'
+    | '/subscriptions'
     | '/tracker-new'
+    | '/subscription-edit/$id'
     | '/tracker-edit/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -105,7 +138,10 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/history'
     | '/settings'
+    | '/subscription-new'
+    | '/subscriptions'
     | '/tracker-new'
+    | '/subscription-edit/$id'
     | '/tracker-edit/$id'
   id:
     | '__root__'
@@ -115,7 +151,10 @@ export interface FileRouteTypes {
     | '/_authenticated/dashboard'
     | '/_authenticated/history'
     | '/_authenticated/settings'
+    | '/_authenticated/subscription-new'
+    | '/_authenticated/subscriptions'
     | '/_authenticated/tracker-new'
+    | '/_authenticated/subscription-edit/$id'
     | '/_authenticated/tracker-edit/$id'
   fileRoutesById: FileRoutesById
 }
@@ -169,11 +208,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/subscription-new': {
+      id: '/_authenticated/subscription-new'
+      path: '/subscription-new'
+      fullPath: '/subscription-new'
+      preLoaderRoute: typeof AuthenticatedSubscriptionNewRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/subscriptions': {
+      id: '/_authenticated/subscriptions'
+      path: '/subscriptions'
+      fullPath: '/subscriptions'
+      preLoaderRoute: typeof AuthenticatedSubscriptionsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/tracker-new': {
       id: '/_authenticated/tracker-new'
       path: '/tracker-new'
       fullPath: '/tracker-new'
       preLoaderRoute: typeof AuthenticatedTrackerNewRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/subscription-edit/$id': {
+      id: '/_authenticated/subscription-edit/$id'
+      path: '/subscription-edit/$id'
+      fullPath: '/subscription-edit/$id'
+      preLoaderRoute: typeof AuthenticatedSubscriptionEditIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/tracker-edit/$id': {
@@ -190,7 +250,10 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedHistoryRoute: typeof AuthenticatedHistoryRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
+  AuthenticatedSubscriptionNewRoute: typeof AuthenticatedSubscriptionNewRoute
+  AuthenticatedSubscriptionsRoute: typeof AuthenticatedSubscriptionsRoute
   AuthenticatedTrackerNewRoute: typeof AuthenticatedTrackerNewRoute
+  AuthenticatedSubscriptionEditIdRoute: typeof AuthenticatedSubscriptionEditIdRoute
   AuthenticatedTrackerEditIdRoute: typeof AuthenticatedTrackerEditIdRoute
 }
 
@@ -198,7 +261,10 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedHistoryRoute: AuthenticatedHistoryRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
+  AuthenticatedSubscriptionNewRoute: AuthenticatedSubscriptionNewRoute,
+  AuthenticatedSubscriptionsRoute: AuthenticatedSubscriptionsRoute,
   AuthenticatedTrackerNewRoute: AuthenticatedTrackerNewRoute,
+  AuthenticatedSubscriptionEditIdRoute: AuthenticatedSubscriptionEditIdRoute,
   AuthenticatedTrackerEditIdRoute: AuthenticatedTrackerEditIdRoute,
 }
 
