@@ -14,11 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      notification_reads: {
+        Row: {
+          id: string
+          notification_key: string
+          read_at: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          notification_key: string
+          read_at?: string
+          user_id?: string
+        }
+        Update: {
+          id?: string
+          notification_key?: string
+          read_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
           default_currency: string
           display_name: string
+          email_reminders_enabled: boolean
           renewal_reminder_days: number
           timezone: string
           updated_at: string
@@ -28,6 +50,7 @@ export type Database = {
           created_at?: string
           default_currency?: string
           display_name?: string
+          email_reminders_enabled?: boolean
           renewal_reminder_days?: number
           timezone?: string
           updated_at?: string
@@ -37,12 +60,48 @@ export type Database = {
           created_at?: string
           default_currency?: string
           display_name?: string
+          email_reminders_enabled?: boolean
           renewal_reminder_days?: number
           timezone?: string
           updated_at?: string
           user_id?: string
         }
         Relationships: []
+      }
+      reminder_deliveries: {
+        Row: {
+          billing_date: string
+          id: string
+          kind: string
+          sent_at: string | null
+          subscription_id: string
+          user_id: string
+        }
+        Insert: {
+          billing_date: string
+          id?: string
+          kind: string
+          sent_at?: string | null
+          subscription_id: string
+          user_id: string
+        }
+        Update: {
+          billing_date?: string
+          id?: string
+          kind?: string
+          sent_at?: string | null
+          subscription_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reminder_deliveries_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       subscription_ratings: {
         Row: {
