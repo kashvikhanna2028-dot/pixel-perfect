@@ -36,6 +36,13 @@
       "when": 1792215307414,
       "tag": "0004_preserve_trial_warnings_during_auto_roll",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792260304843,
+      "tag": "0005_persist_notification_reads_and_opt_in_reminders",
+      "breakpoints": true
     }
   ]
 }
