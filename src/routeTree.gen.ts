@@ -20,6 +20,7 @@ import { Route as AuthenticatedSubscriptionsRouteImport } from './routes/_authen
 import { Route as AuthenticatedTrackerNewRouteImport } from './routes/_authenticated/tracker-new'
 import { Route as AuthenticatedSubscriptionEditIdRouteImport } from './routes/_authenticated/subscription-edit.$id'
 import { Route as AuthenticatedTrackerEditIdRouteImport } from './routes/_authenticated/tracker-edit.$id'
+import { Route as ApiPublicSendRemindersRouteImport } from './routes/api/public/send-reminders'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -79,6 +80,11 @@ const AuthenticatedTrackerEditIdRoute =
     path: '/tracker-edit/$id',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const ApiPublicSendRemindersRoute = ApiPublicSendRemindersRouteImport.update({
+  id: '/api/public/send-reminders',
+  path: '/api/public/send-reminders',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -91,6 +97,7 @@ export interface FileRoutesByFullPath {
   '/tracker-new': typeof AuthenticatedTrackerNewRoute
   '/subscription-edit/$id': typeof AuthenticatedSubscriptionEditIdRoute
   '/tracker-edit/$id': typeof AuthenticatedTrackerEditIdRoute
+  '/api/public/send-reminders': typeof ApiPublicSendRemindersRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -103,6 +110,7 @@ export interface FileRoutesByTo {
   '/tracker-new': typeof AuthenticatedTrackerNewRoute
   '/subscription-edit/$id': typeof AuthenticatedSubscriptionEditIdRoute
   '/tracker-edit/$id': typeof AuthenticatedTrackerEditIdRoute
+  '/api/public/send-reminders': typeof ApiPublicSendRemindersRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -117,6 +125,7 @@ export interface FileRoutesById {
   '/_authenticated/tracker-new': typeof AuthenticatedTrackerNewRoute
   '/_authenticated/subscription-edit/$id': typeof AuthenticatedSubscriptionEditIdRoute
   '/_authenticated/tracker-edit/$id': typeof AuthenticatedTrackerEditIdRoute
+  '/api/public/send-reminders': typeof ApiPublicSendRemindersRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -131,6 +140,7 @@ export interface FileRouteTypes {
     | '/tracker-new'
     | '/subscription-edit/$id'
     | '/tracker-edit/$id'
+    | '/api/public/send-reminders'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -143,6 +153,7 @@ export interface FileRouteTypes {
     | '/tracker-new'
     | '/subscription-edit/$id'
     | '/tracker-edit/$id'
+    | '/api/public/send-reminders'
   id:
     | '__root__'
     | '/'
@@ -156,12 +167,14 @@ export interface FileRouteTypes {
     | '/_authenticated/tracker-new'
     | '/_authenticated/subscription-edit/$id'
     | '/_authenticated/tracker-edit/$id'
+    | '/api/public/send-reminders'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ApiPublicSendRemindersRoute: typeof ApiPublicSendRemindersRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -243,6 +256,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedTrackerEditIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/public/send-reminders': {
+      id: '/api/public/send-reminders'
+      path: '/api/public/send-reminders'
+      fullPath: '/api/public/send-reminders'
+      preLoaderRoute: typeof ApiPublicSendRemindersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -275,6 +295,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  ApiPublicSendRemindersRoute: ApiPublicSendRemindersRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
