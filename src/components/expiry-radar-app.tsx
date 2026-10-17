@@ -585,7 +585,7 @@ export function ProtectedLayout() {
         </div>
       </aside>
       <div className="lg:pl-64">
-        <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-border bg-background/90 px-4 backdrop-blur sm:px-8">
+        <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-border bg-background/90 px-4 text-foreground backdrop-blur sm:px-8">
           <div className="lg:hidden">
             <Link to="/dashboard">
               <Brand />

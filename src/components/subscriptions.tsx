@@ -76,9 +76,9 @@ export function SubscriptionsPage() {
   const chartData = subscriptionCategories.map(c => ({ name: label(c), value: insights.filter(s => s.category === c).reduce((sum,s) => sum + monthlyCost(s),0) })).filter(c => c.value > 0);
   const timeline = renewalTimeline(active, today);
   const dueTotals = timeline.reduce<Record<string,number>>((a,item) => ({ ...a,[item.subscription.currency]: (a[item.subscription.currency] ?? 0) + item.amount }),{});
-  const ranked = active.filter(s => !s.is_trial && s.currency === insightCurrency).map(s => ({ s, rating: data.ratings.find(r => r.subscription_id === s.id && r.month === month)?.rating ?? null })).sort((a,b) => (b.rating ?? 0) / Math.max(monthlyCost(b.s),1) - (a.rating ?? 0) / Math.max(monthlyCost(a.s),1));
+  const ranked = active.filter(s => s.currency === insightCurrency).map(s => ({ s, rating: data.ratings.find(r => r.subscription_id === s.id && r.month === month)?.rating ?? null })).sort((a,b) => (b.rating ?? 0) / Math.max(monthlyCost(b.s),1) - (a.rating ?? 0) / Math.max(monthlyCost(a.s),1));
   const median = (values: number[]) => { const sorted = [...values].sort((a,b) => a-b); return sorted.length ? sorted[Math.floor(sorted.length / 2)] ?? 0 : 0; };
-  const flagged = ranked.filter(({s,rating}) => rating !== null && rating <= 2 && monthlyCost(s) >= median(active.filter(a => a.currency === s.currency && !a.is_trial).map(monthlyCost)));
+  const flagged = ranked.filter(({s,rating}) => !s.is_trial && rating !== null && rating <= 2 && monthlyCost(s) >= median(active.filter(a => a.currency === s.currency && !a.is_trial).map(monthlyCost)));
   const duplicates = ['streaming','music'].map(c => ({ category: c, items: active.filter(s => s.category === c) })).filter(g => g.items.length > 1);
   async function update(s: Subscription, action: 'pause'|'cancel'|'delete'|'renew') {
     if ((action === 'delete' || action === 'cancel') && !window.confirm(action === 'delete' ? `Delete ${s.name} and its ratings?` : `Mark ${s.name} as cancelled? This does not cancel with the provider.`)) return;
