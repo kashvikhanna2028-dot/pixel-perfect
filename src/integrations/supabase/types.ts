@@ -17,23 +17,130 @@ export type Database = {
       profiles: {
         Row: {
           created_at: string
+          default_currency: string
           display_name: string
+          renewal_reminder_days: number
           timezone: string
           updated_at: string
           user_id: string
         }
         Insert: {
           created_at?: string
+          default_currency?: string
           display_name?: string
+          renewal_reminder_days?: number
           timezone?: string
           updated_at?: string
           user_id: string
         }
         Update: {
           created_at?: string
+          default_currency?: string
           display_name?: string
+          renewal_reminder_days?: number
           timezone?: string
           updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      subscription_ratings: {
+        Row: {
+          created_at: string
+          id: string
+          month: string
+          rating: number
+          subscription_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          month: string
+          rating: number
+          subscription_id: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          month?: string
+          rating?: number
+          subscription_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscription_ratings_subscription_id_user_id_fkey"
+            columns: ["subscription_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
+      subscriptions: {
+        Row: {
+          auto_renew: boolean
+          billing_cycle: string
+          cancel_url: string
+          category: string
+          created_at: string
+          currency: string
+          custom_days: number | null
+          id: string
+          is_trial: boolean
+          name: string
+          next_billing_date: string
+          notes: string
+          payment_method: string
+          price: number
+          shared_with: number
+          start_date: string
+          status: string
+          trial_ends_on: string | null
+          user_id: string
+        }
+        Insert: {
+          auto_renew?: boolean
+          billing_cycle: string
+          cancel_url?: string
+          category: string
+          created_at?: string
+          currency?: string
+          custom_days?: number | null
+          id?: string
+          is_trial?: boolean
+          name: string
+          next_billing_date: string
+          notes?: string
+          payment_method?: string
+          price: number
+          shared_with?: number
+          start_date: string
+          status?: string
+          trial_ends_on?: string | null
+          user_id?: string
+        }
+        Update: {
+          auto_renew?: boolean
+          billing_cycle?: string
+          cancel_url?: string
+          category?: string
+          created_at?: string
+          currency?: string
+          custom_days?: number | null
+          id?: string
+          is_trial?: boolean
+          name?: string
+          next_billing_date?: string
+          notes?: string
+          payment_method?: string
+          price?: number
+          shared_with?: number
+          start_date?: string
+          status?: string
+          trial_ends_on?: string | null
           user_id?: string
         }
         Relationships: []
@@ -132,7 +239,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      advance_subscription_date: {
+        Args: { anchor: string; cycle: string; d: string; days: number }
+        Returns: string
+      }
+      mark_subscription_renewed: {
+        Args: { expected_date: string; subscription: string }
+        Returns: undefined
+      }
+      roll_subscription_renewals: { Args: never; Returns: undefined }
     }
     Enums: {
       [_ in never]: never

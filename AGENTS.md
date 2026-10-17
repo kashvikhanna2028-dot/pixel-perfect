@@ -15,3 +15,7 @@
 
 - Keep dashboard, authentication, history, settings, and tracker forms within one shared app shell so account state and navigation stay consistent.
 - Keep expiry calculations pure in `src/lib/expiry-radar.ts` so reset timing can be tested independently of the interface.
+- Keep subscription calculations, validation, presets, and CSV serialization in `src/lib/subscriptions.ts` so billing rules can be tested independently.
+- Load subscription data through authenticated server functions and shared TanStack Query options so the list, overview, and notifications agree after mutations.
+- Advance billing dates through owner-scoped database RPCs with row locks or expected-date checks to prevent duplicate renewal updates.
+- Prepare future email reminders in authenticated TanStack server functions; external schedulers must use signature-verified public server routes rather than Edge Functions.
