@@ -29,6 +29,13 @@
       "when": 1792215037805,
       "tag": "0003_add_subscription_tracking",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792215307414,
+      "tag": "0004_preserve_trial_warnings_during_auto_roll",
+      "breakpoints": true
     }
   ]
 }
