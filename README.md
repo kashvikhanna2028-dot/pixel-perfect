@@ -36,8 +36,8 @@ renewal timeline. Different currencies are totaled separately; no exchange rates
 assumed. Current spending excludes free trials and paused/cancelled subscriptions.
 Prices in demo data are illustrative, not current provider pricing.
 
-Active auto-renewing paid plans advance overdue billing dates through an owner-scoped,
-row-locking database function on load. Trials deliberately retain their end date until
+Active auto-renewing plans advance overdue billing dates through an owner-scoped,
+row-locking database function on load. Trials retain their separate trial end date until
 the user records renewal, so an expired trial warning cannot disappear silently.
 Manual renewal uses an expected-date check to prevent duplicate concurrent advances.
 Calendar cycles retain the start-date day and clamp to the month's last day.
