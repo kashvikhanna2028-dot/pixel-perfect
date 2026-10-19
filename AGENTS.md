@@ -18,4 +18,6 @@
 - Keep subscription calculations, validation, presets, and CSV serialization in `src/lib/subscriptions.ts` so billing rules can be tested independently.
 - Load subscription data through authenticated server functions and shared TanStack Query options so the list, overview, and notifications agree after mutations.
 - Advance billing dates through owner-scoped database RPCs with row locks or expected-date checks to prevent duplicate renewal updates.
-- Prepare future email reminders in authenticated TanStack server functions; external schedulers must use signature-verified public server routes rather than Edge Functions.
+- Persist notification acknowledgements through owner-scoped authenticated server functions and account-keyed Query caches; migrate legacy local state only after a successful save, with focus/interval refresh for other devices.
+- Dispatch scheduled email only through a shared-secret-verified public server route; keep recipient selection server-side, reserve each unique delivery before provider calls, and retain failed reservations to prevent uncertain duplicate sends.
+- Keep reminder eligibility, secret verification, and delivery orchestration testable in client-safe pure modules; provider adapters stay in server-only helpers and authenticated server functions own test emails.
