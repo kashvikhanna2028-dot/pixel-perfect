@@ -11,6 +11,8 @@ import { Progress } from '@/components/ui/progress';
 import { Switch } from '@/components/ui/switch';
 import { supabase } from '@/integrations/supabase/client';
 import { subscriptionQueryOptions } from '@/lib/subscriptions-query';
+import { useNotificationReads } from '@/lib/use-notification-reads';
+import { renewalNotificationKey, unratedNotificationKey, unreadNotificationCount } from '@/lib/subscription-notifications';
 import { advanceDate, currencies, currencyTotals, cycles, dateAfter, dayDistance, label, localToday, money, monthKey, monthlyCost, periodProgress, presets, renewalTimeline, renewalUrgency, subscriptionCategories, subscriptionSchema, subscriptionsCsv, userShare, type Subscription, type SubscriptionDraft } from '@/lib/subscriptions';
 
 const categoryIcons = { streaming: Tv, music: Music, shopping: ShoppingBag, software: CreditCard, cloud_storage: Cloud, news: Newspaper, gaming: Gamepad2, fitness: Dumbbell, education: GraduationCap, other: Wallet };
@@ -33,28 +35,24 @@ export function SubscriptionOverview({ trackersAtRisk }: { trackersAtRisk: numbe
 export function SubscriptionNotificationBell() {
   const { data, isError } = useQuery(subscriptionQueryOptions);
   const [open, setOpen] = useState(false);
-  const [read, setRead] = useState<string[]>([]);
-  useEffect(() => {
-    if (!data?.userId) return;
-    try { setRead(JSON.parse(localStorage.getItem(`subscription-read-${data.userId}`) ?? '[]')); } catch { setRead([]); }
-  }, [data?.userId]);
+  const reads = useNotificationReads(data?.userId, data?.subscriptions);
+  const read = reads.read;
   const today = localToday(data?.profile.timezone ?? 'UTC');
   const month = monthKey(today);
   const notifications = data?.subscriptions.filter(s => s.status === 'active').flatMap(s => {
     const date = s.is_trial ? s.trial_ends_on ?? s.next_billing_date : s.next_billing_date;
     const days = dayDistance(today, date);
     const items: { id: string; text: string; urgent: boolean }[] = [];
-    if (days <= data.profile.renewal_reminder_days) items.push({ id: `${s.id}-${date}-${s.is_trial}`, text: `${s.name}: ${s.is_trial ? 'trial ends' : 'renews'} ${days < 0 ? `${Math.abs(days)} days overdue` : days === 0 ? 'today' : `in ${days} days`}`, urgent: s.is_trial || days < 3 });
-    if (!data.ratings.some(r => r.subscription_id === s.id && r.month === month)) items.push({ id: `${s.id}-rating-${month}`, text: `How much did you use ${s.name} this month?`, urgent: false });
+    if (days <= data.profile.renewal_reminder_days) items.push({ id: renewalNotificationKey(s.id, date, s.is_trial), text: `${s.name}: ${s.is_trial ? 'trial ends' : 'renews'} ${days < 0 ? `${Math.abs(days)} days overdue` : days === 0 ? 'today' : `in ${days} days`}`, urgent: s.is_trial || days < 3 });
+    if (!data.ratings.some(r => r.subscription_id === s.id && r.month === month)) items.push({ id: unratedNotificationKey(s.id, month), text: `How much did you use ${s.name} this month?`, urgent: false });
     return items;
   }) ?? [];
-  const unread = notifications.filter(n => !read.includes(n.id)).length;
+  const unread = unreadNotificationCount(notifications.map(n => n.id), read);
   function markRead() {
     const ids = notifications.map(n => n.id);
-    setRead(ids);
-    if (data?.userId) localStorage.setItem(`subscription-read-${data.userId}`, JSON.stringify(ids));
+    reads.markRead(ids);
   }
-  return <div className="relative"><Button variant="ghost" size="icon" className="text-foreground" aria-label={`Notifications, ${unread} unread`} title="Notifications" onClick={() => setOpen(!open)}><Bell/>{unread > 0 && <span className="absolute right-0 top-0 flex min-w-4 items-center justify-center rounded-full bg-urgency px-1 text-[10px] text-urgency-foreground">{unread}</span>}</Button>{open && <div className="absolute right-0 top-12 z-30 w-[min(340px,calc(100vw-32px))] rounded-lg border border-border bg-popover p-4 text-popover-foreground shadow-sm"><div className="mb-3 flex items-center justify-between"><h2 className="font-semibold">Notifications</h2><Button size="icon" variant="ghost" aria-label="Close notifications" onClick={() => setOpen(false)}><X/></Button></div>{notifications.length > 0 && <Button variant="link" className="mb-2 h-auto p-0" onClick={markRead}>Mark all as read</Button>}<div className="max-h-80 overflow-auto">{notifications.map(n => <Link key={n.id} to="/subscriptions" onClick={() => setOpen(false)} className={`block border-t border-border py-3 text-sm ${n.urgent ? 'text-urgency' : 'text-foreground'}`}><span className={read.includes(n.id) ? 'opacity-60' : 'font-medium'}>{n.text}</span></Link>)}{!notifications.length && <p className="text-sm text-muted-foreground">{isError ? 'Notifications unavailable. Try again shortly.' : data ? 'All caught up.' : 'Loading notifications…'}</p>}</div></div>}</div>;
+  return <div className="relative"><Button variant="ghost" size="icon" className="text-foreground" aria-label={`Notifications, ${unread} unread`} title="Notifications" onClick={() => setOpen(!open)}><Bell/>{unread > 0 && <span className="absolute right-0 top-0 flex min-w-4 items-center justify-center rounded-full bg-urgency px-1 text-[10px] text-urgency-foreground">{unread}</span>}</Button>{open && <div className="absolute right-0 top-12 z-30 w-[min(340px,calc(100vw-32px))] rounded-lg border border-border bg-popover p-4 text-popover-foreground shadow-sm"><div className="mb-3 flex items-center justify-between"><h2 className="font-semibold">Notifications</h2><Button size="icon" variant="ghost" aria-label="Close notifications" onClick={() => setOpen(false)}><X/></Button></div>{reads.isError && <p className="mb-2 text-sm text-muted-foreground">Read status unavailable. Please retry shortly.</p>}{notifications.length > 0 && <Button variant="link" className="mb-2 h-auto p-0" disabled={reads.pending} onClick={markRead}>Mark all as read</Button>}<div className="max-h-80 overflow-auto">{notifications.map(n => <Link key={n.id} to="/subscriptions" onClick={() => { reads.markRead([n.id]); setOpen(false); }} className={`block border-t border-border py-3 text-sm ${n.urgent ? 'text-urgency' : 'text-foreground'}`}><span className={read.includes(n.id) ? 'opacity-60' : 'font-medium'}>{n.text}</span></Link>)}{!notifications.length && <p className="text-sm text-muted-foreground">{isError ? 'Notifications unavailable. Try again shortly.' : data ? 'All caught up.' : 'Loading notifications…'}</p>}</div></div>}</div>;
 }
 
 export function SubscriptionsPage() {

@@ -6,6 +6,7 @@
 
 ## Finish subscription gaps
 - [x] Run baseline tests and inspect current build diagnostics.
-- [ ] Persist and migrate notification reads with optimistic updates and device synchronization.
-- [ ] Add opt-in email settings, protected daily dispatch, delivery deduplication, and a test reminder.
-- [ ] Document provider/secrets/scheduling setup and verify tests and signed-in flows.
+- [x] Persist and migrate notification reads with optimistic updates and device synchronization.
+- [x] Add opt-in email settings, protected daily dispatch, delivery deduplication, and a test reminder.
+- [x] Document provider/secrets/scheduling setup and verify tests and signed-in flows.
+- [ ] Activate and verify live email delivery — blocked by skipped provider connection, sender and cron secrets, and daily schedule configuration.
