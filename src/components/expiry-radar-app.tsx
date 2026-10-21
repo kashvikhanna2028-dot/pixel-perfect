@@ -40,6 +40,15 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
+import { OtpVerifyPanel, SecurityCard } from "@/components/auth-recovery";
+import {
+  COUNTRY_CODES,
+  DEFAULT_COUNTRY_DIAL,
+  GENERIC_CODE_MESSAGE,
+  attemptsExhausted,
+  friendlyOtpError,
+  normalizePhoneToE164,
+} from "@/lib/auth-recovery";
 import {
   dateTimeFieldToIso,
   formatCountdown,
