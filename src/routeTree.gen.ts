@@ -22,6 +22,7 @@ import { Route as AuthenticatedSubscriptionsRouteImport } from './routes/_authen
 import { Route as AuthenticatedTrackerNewRouteImport } from './routes/_authenticated/tracker-new'
 import { Route as AuthenticatedSubscriptionEditIdRouteImport } from './routes/_authenticated/subscription-edit.$id'
 import { Route as AuthenticatedTrackerEditIdRouteImport } from './routes/_authenticated/tracker-edit.$id'
+import { Route as ApiPublicRazorpayWebhookRouteImport } from './routes/api/public/razorpay-webhook'
 import { Route as ApiPublicSendRemindersRouteImport } from './routes/api/public/send-reminders'
 
 const IndexRoute = IndexRouteImport.update({
@@ -92,6 +93,12 @@ const AuthenticatedTrackerEditIdRoute =
     path: '/tracker-edit/$id',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const ApiPublicRazorpayWebhookRoute =
+  ApiPublicRazorpayWebhookRouteImport.update({
+    id: '/api/public/razorpay-webhook',
+    path: '/api/public/razorpay-webhook',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicSendRemindersRoute = ApiPublicSendRemindersRouteImport.update({
   id: '/api/public/send-reminders',
   path: '/api/public/send-reminders',
@@ -111,6 +118,7 @@ export interface FileRoutesByFullPath {
   '/tracker-new': typeof AuthenticatedTrackerNewRoute
   '/subscription-edit/$id': typeof AuthenticatedSubscriptionEditIdRoute
   '/tracker-edit/$id': typeof AuthenticatedTrackerEditIdRoute
+  '/api/public/razorpay-webhook': typeof ApiPublicRazorpayWebhookRoute
   '/api/public/send-reminders': typeof ApiPublicSendRemindersRoute
 }
 export interface FileRoutesByTo {
@@ -126,6 +134,7 @@ export interface FileRoutesByTo {
   '/tracker-new': typeof AuthenticatedTrackerNewRoute
   '/subscription-edit/$id': typeof AuthenticatedSubscriptionEditIdRoute
   '/tracker-edit/$id': typeof AuthenticatedTrackerEditIdRoute
+  '/api/public/razorpay-webhook': typeof ApiPublicRazorpayWebhookRoute
   '/api/public/send-reminders': typeof ApiPublicSendRemindersRoute
 }
 export interface FileRoutesById {
@@ -143,6 +152,7 @@ export interface FileRoutesById {
   '/_authenticated/tracker-new': typeof AuthenticatedTrackerNewRoute
   '/_authenticated/subscription-edit/$id': typeof AuthenticatedSubscriptionEditIdRoute
   '/_authenticated/tracker-edit/$id': typeof AuthenticatedTrackerEditIdRoute
+  '/api/public/razorpay-webhook': typeof ApiPublicRazorpayWebhookRoute
   '/api/public/send-reminders': typeof ApiPublicSendRemindersRoute
 }
 export interface FileRouteTypes {
@@ -160,6 +170,7 @@ export interface FileRouteTypes {
     | '/tracker-new'
     | '/subscription-edit/$id'
     | '/tracker-edit/$id'
+    | '/api/public/razorpay-webhook'
     | '/api/public/send-reminders'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -175,6 +186,7 @@ export interface FileRouteTypes {
     | '/tracker-new'
     | '/subscription-edit/$id'
     | '/tracker-edit/$id'
+    | '/api/public/razorpay-webhook'
     | '/api/public/send-reminders'
   id:
     | '__root__'
@@ -191,6 +203,7 @@ export interface FileRouteTypes {
     | '/_authenticated/tracker-new'
     | '/_authenticated/subscription-edit/$id'
     | '/_authenticated/tracker-edit/$id'
+    | '/api/public/razorpay-webhook'
     | '/api/public/send-reminders'
   fileRoutesById: FileRoutesById
 }
@@ -200,6 +213,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  ApiPublicRazorpayWebhookRoute: typeof ApiPublicRazorpayWebhookRoute
   ApiPublicSendRemindersRoute: typeof ApiPublicSendRemindersRoute
 }
 
@@ -296,6 +310,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedTrackerEditIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/public/razorpay-webhook': {
+      id: '/api/public/razorpay-webhook'
+      path: '/api/public/razorpay-webhook'
+      fullPath: '/api/public/razorpay-webhook'
+      preLoaderRoute: typeof ApiPublicRazorpayWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/send-reminders': {
       id: '/api/public/send-reminders'
       path: '/api/public/send-reminders'
@@ -337,6 +358,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  ApiPublicRazorpayWebhookRoute: ApiPublicRazorpayWebhookRoute,
   ApiPublicSendRemindersRoute: ApiPublicSendRemindersRoute,
 }
 export const routeTree = rootRouteImport
