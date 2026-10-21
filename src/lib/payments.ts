@@ -4,6 +4,10 @@ export const proPricing = {
   pro_monthly: { amountPaise: 14_900, currency: 'INR', entitlementMonths: 1 },
   pro_yearly: { amountPaise: 119_900, currency: 'INR', entitlementMonths: 12 },
 } as const;
+export const freePlanLimits = {
+  trackers: 5,
+  subscriptions: 5,
+} as const;
 
 export type ProPlan = keyof typeof proPricing;
 export type PaymentStatus = 'created' | 'paid' | 'failed';

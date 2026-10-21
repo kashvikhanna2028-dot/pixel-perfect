@@ -11,6 +11,8 @@ import { Progress } from '@/components/ui/progress';
 import { Switch } from '@/components/ui/switch';
 import { supabase } from '@/integrations/supabase/client';
 import { subscriptionQueryOptions } from '@/lib/subscriptions-query';
+import { billingQueryOptions } from '@/lib/payments-query';
+import { freePlanLimits } from '@/lib/payments';
 import { useNotificationReads } from '@/lib/use-notification-reads';
 import { renewalNotificationKey, unratedNotificationKey, unreadNotificationCount } from '@/lib/subscription-notifications';
 import { advanceDate, currencies, currencyTotals, cycles, dateAfter, dayDistance, label, localToday, money, monthKey, monthlyCost, periodProgress, presets, renewalTimeline, renewalUrgency, subscriptionCategories, subscriptionSchema, subscriptionsCsv, userShare, type Subscription, type SubscriptionDraft } from '@/lib/subscriptions';
@@ -57,6 +59,7 @@ export function SubscriptionNotificationBell() {
 
 export function SubscriptionsPage() {
   const { data } = useSuspenseQuery(subscriptionQueryOptions);
+  const billing = useQuery(billingQueryOptions);
   const refresh = useSubscriptionRefresh();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('all');
@@ -67,6 +70,11 @@ export function SubscriptionsPage() {
   useEffect(() => { const timer = window.setInterval(() => setNow(new Date()),60000); return () => clearInterval(timer); },[]);
   const today = localToday(data.profile.timezone, now);
   const active = data.subscriptions.filter(s => s.status === 'active');
+  const isProActive =
+    billing.data?.entitlement.plan === 'pro' &&
+    (!billing.data.entitlement.pro_until ||
+      new Date(billing.data.entitlement.pro_until).getTime() > Date.now());
+  const subscriptionLimitReached = !isProActive && data.subscriptions.length >= freePlanLimits.subscriptions;
   const month = monthKey(today);
   const renewing = active.filter(s => { const d = dayDistance(today,s.is_trial ? s.trial_ends_on ?? s.next_billing_date : s.next_billing_date); return d >= 0 && d <= 7; });
   const filtered = data.subscriptions.filter(s => s.name.toLowerCase().includes(search.toLowerCase()) && (category === 'all' || s.category === category) && (status === 'all' || s.status === status));
@@ -99,7 +107,12 @@ export function SubscriptionsPage() {
     const a = document.createElement('a'); a.href = url; a.download = `subscriptions-${today}.csv`; a.click(); URL.revokeObjectURL(url); toast.success('Subscriptions exported.');
   }
   return <div className="space-y-8 radar-enter">
-    <header className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs font-semibold uppercase text-primary">Your recurring spend</p><h1 className="mt-2 text-3xl font-semibold">Subscriptions</h1><p className="mt-2 text-sm text-muted-foreground">Keep the good ones. Rethink the rest.</p></div><div className="flex gap-2"><Button variant="outline" size="icon" title="Export subscriptions to CSV" aria-label="Export subscriptions to CSV" onClick={exportCsv}><Download/></Button><Button asChild><Link to="/subscription-new"><Plus/>Add subscription</Link></Button></div></header>
+    <header className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs font-semibold uppercase text-primary">Your recurring spend</p><h1 className="mt-2 text-3xl font-semibold">Subscriptions</h1><p className="mt-2 text-sm text-muted-foreground">Keep the good ones. Rethink the rest.</p></div><div className="flex gap-2"><Button variant="outline" size="icon" title="Export subscriptions to CSV" aria-label="Export subscriptions to CSV" onClick={exportCsv}><Download/></Button>{subscriptionLimitReached ? <Button asChild variant="outline"><Link to="/pricing">Upgrade for more</Link></Button> : <Button asChild><Link to="/subscription-new"><Plus/>Add subscription</Link></Button>}</div></header>
+    {subscriptionLimitReached && (
+      <section className="rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
+        Free plan includes up to {freePlanLimits.subscriptions} subscriptions. Upgrade to Pro to add more.
+      </section>
+    )}
     <section aria-label="Subscription summary" className="grid grid-cols-2 gap-4 border-y border-border py-6 lg:grid-cols-4">{[{ title:'Monthly cost',value:<Totals totals={currencyTotals(active)}/> },{title:'Yearly cost',value:<Totals totals={currencyTotals(active,12)}/>},{title:'Active subscriptions',value:active.length},{title:'Renewing within 7 days',value:renewing.length}].map(({title,value}) => <div key={title}><p className="text-xs text-muted-foreground">{title}</p><div className="mt-2 break-words text-xl font-semibold">{value}</div></div>)}</section>
     <div className="flex flex-wrap gap-3"><Input className="w-full sm:w-60" placeholder="Search subscriptions" aria-label="Search subscriptions" value={search} onChange={e => setSearch(e.target.value)}/><select aria-label="Filter category" className={`${selectClass} sm:w-44`} value={category} onChange={e => setCategory(e.target.value)}><option value="all">All categories</option>{subscriptionCategories.map(c => <option key={c} value={c}>{label(c)}</option>)}</select><select aria-label="Filter status" className={`${selectClass} sm:w-40`} value={status} onChange={e => setStatus(e.target.value)}><option value="all">All statuses</option>{['active','paused','cancelled'].map(s => <option key={s} value={s}>{label(s)}</option>)}</select></div>
     {!filtered.length ? <div className="py-12 text-center"><CreditCard className="mx-auto size-12 text-primary"/><h2 className="mt-4 text-lg font-semibold">{data.subscriptions.length ? 'No matching subscriptions' : 'Your subscriptions, in one place'}</h2>{!data.subscriptions.length && <Button asChild className="mt-4"><Link to="/subscription-new"><Plus/>Add your first subscription</Link></Button>}</div> : <section aria-label="Subscription list" className="grid gap-4 xl:grid-cols-2">{filtered.map(s => {
@@ -122,6 +135,7 @@ export function SubscriptionsPage() {
 
 export function SubscriptionEditor({ subscriptionId }: { subscriptionId?: string }) {
   const { data } = useSuspenseQuery(subscriptionQueryOptions);
+  const { data: billingData } = useQuery(billingQueryOptions);
   const navigate = useNavigate();
   const refresh = useSubscriptionRefresh();
   const existing = data.subscriptions.find(s => s.id === subscriptionId);
@@ -137,6 +151,17 @@ export function SubscriptionEditor({ subscriptionId }: { subscriptionId?: string
     event.preventDefault();
     const parsed = subscriptionSchema.safeParse({ ...form,price:price.trim() === '' ? NaN : Number(price),trial_ends_on:form.is_trial ? form.trial_ends_on : null,custom_days:form.billing_cycle === 'custom_days' ? form.custom_days : null });
     if (!parsed.success) { setErrors(Object.fromEntries(parsed.error.issues.map(i => [i.path[0],i.message]))); return; }
+    if (!subscriptionId) {
+      const isProActive =
+        billingData?.entitlement.plan === 'pro' &&
+        (!billingData.entitlement.pro_until ||
+          new Date(billingData.entitlement.pro_until).getTime() > Date.now());
+      if (!isProActive && data.subscriptions.length >= freePlanLimits.subscriptions) {
+        toast.error(`Free plan allows up to ${freePlanLimits.subscriptions} subscriptions. Upgrade to Pro to add more.`);
+        await navigate({ to: '/pricing' });
+        return;
+      }
+    }
     setSaving(true); setErrors({});
     const result = subscriptionId ? await supabase.from('subscriptions').update(parsed.data).eq('id',subscriptionId).eq('user_id',data.userId) : await supabase.from('subscriptions').insert({ ...parsed.data,user_id:data.userId });
     setSaving(false);

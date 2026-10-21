@@ -45,3 +45,32 @@ export const verifyPayment = createServerFn({ method: 'POST' })
 
     return { ok: true };
   });
+
+export const getBillingData = createServerFn({ method: 'POST' })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const [entitlement, payments] = await Promise.all([
+      context.supabase
+        .from('entitlements')
+        .select('plan,pro_until,updated_at')
+        .eq('user_id', context.userId)
+        .maybeSingle(),
+      context.supabase
+        .from('payments')
+        .select(
+          'id,plan,amount_paise,currency,status,created_at,paid_at,razorpay_order_id,razorpay_payment_id',
+        )
+        .eq('user_id', context.userId)
+        .order('created_at', { ascending: false })
+        .limit(30),
+    ]);
+    if (entitlement.error || payments.error) throw new Error('Billing data could not be loaded.');
+
+    const keyId = process.env['RAZORPAY_KEY_ID'] ?? '';
+    const testMode = keyId.startsWith('rzp_test_');
+    return {
+      entitlement: entitlement.data ?? { plan: 'free' as const, pro_until: null, updated_at: null },
+      payments: payments.data,
+      testMode,
+    };
+  });

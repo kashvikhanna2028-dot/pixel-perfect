@@ -65,8 +65,12 @@ import {
 import { SubscriptionNotificationBell, SubscriptionOverview } from "@/components/subscriptions";
 import { demoSubscriptions, currencies } from "@/lib/subscriptions";
 import { ReminderEmailSettings } from "@/components/reminder-email-settings";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import editorialStillLife from "@/assets/expiry-radar-still-life.jpg";
+import { createOrder, verifyPayment } from "@/lib/payments.functions";
+import { billingQueryOptions } from "@/lib/payments-query";
+import { freePlanLimits, proPricing, type ProPlan } from "@/lib/payments";
 
 const categories: { value: TrackerCategory; label: string; Icon: typeof Layers3 }[] = [
   { value: "llm_credits", label: "AI credits", Icon: Sparkles },
@@ -105,6 +109,35 @@ function currentTimeZone() {
   } catch {
     return "UTC";
   }
+
+  type RazorpayCheckoutOptions = {
+    key: string;
+    amount: number;
+    currency: string;
+    name: string;
+    description: string;
+    order_id: string;
+    handler: (response: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => void;
+    modal?: { ondismiss?: () => void };
+  };
+
+  declare global {
+    interface Window {
+      Razorpay?: new (options: RazorpayCheckoutOptions) => { open: () => void };
+    }
+  }
+
+  async function ensureRazorpayLoaded(): Promise<boolean> {
+    if (window.Razorpay) return true;
+    return new Promise((resolve) => {
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.async = true;
+      script.onload = () => resolve(Boolean(window.Razorpay));
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  }
 }
 
 function Brand({ inverse = false }: { inverse?: boolean }) {
@@ -141,6 +174,12 @@ export function LandingPage() {
       <header className="mx-auto flex max-w-7xl items-center justify-between px-5 py-5 md:px-10">
         <Brand />
         <nav className="flex items-center gap-3">
+          <Link
+            to="/pricing"
+            className="hidden text-sm font-medium text-muted-foreground transition hover:text-foreground sm:inline-flex"
+          >
+            Pricing
+          </Link>
           <Link
             to={session ? "/dashboard" : "/auth"}
             className="hidden text-sm font-medium text-muted-foreground transition hover:text-foreground sm:inline-flex"
@@ -191,6 +230,9 @@ export function LandingPage() {
                   <Link to="/auth">Log in</Link>
                 </Button>
               )}
+              <Button asChild size="lg" variant="outline">
+                <Link to="/pricing">View plans</Link>
+              </Button>
             </div>
             <p className="mt-5 text-xs text-muted-foreground">
               A clear view of what’s next. No more “I meant to use that.”
