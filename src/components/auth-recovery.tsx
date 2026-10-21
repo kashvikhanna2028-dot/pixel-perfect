@@ -9,6 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import {
+  COUNTRY_CODES,
+  DEFAULT_COUNTRY_DIAL,
+  GENERIC_CODE_MESSAGE,
   GENERIC_RESET_MESSAGE,
   OTP_LENGTH,
   PASSWORD_MAX_LENGTH,
@@ -18,6 +21,7 @@ import {
   expiryRemaining,
   formatOtpCountdown,
   friendlyOtpError,
+  normalizePhoneToE164,
   passwordStrength,
   passwordsMatch,
 } from "@/lib/auth-recovery";
