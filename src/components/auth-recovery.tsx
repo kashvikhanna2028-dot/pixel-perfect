@@ -420,6 +420,137 @@ interface SecurityCardProps {
   hasPassword: boolean;
 }
 
+// Settings → Security: add or replace the sign-in phone number with OTP verification.
+export function AddPhoneSection({ currentPhone, onChanged }: { currentPhone: string | null; onChanged: () => void }) {
+  const [dial, setDial] = useState(DEFAULT_COUNTRY_DIAL);
+  const [number, setNumber] = useState("");
+  const [pending, setPending] = useState<{ phone: string; sentAtMs: number; resendStartedAtMs: number; attempts: number } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function sendCode(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const e164 = normalizePhoneToE164(dial, number);
+    if (!e164) {
+      toast.error("Enter a valid phone number for the selected country code.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ phone: e164 });
+      if (error) throw error;
+      const now = Date.now();
+      setPending({ phone: e164, sentAtMs: now, resendStartedAtMs: now, attempts: 0 });
+      toast.success(GENERIC_CODE_MESSAGE);
+    } catch (err) {
+      toast.error(friendlyOtpError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function verify(code: string) {
+    if (!pending) return;
+    setBusy(true);
+    try {
+      const { error } = await supabase.auth.verifyOtp({
+        phone: pending.phone,
+        token: code,
+        type: "phone_change",
+      });
+      if (error) {
+        const attempts = pending.attempts + 1;
+        setPending({ ...pending, attempts });
+        toast.error(attemptsExhausted(attempts) ? "Too many attempts, try again in a few minutes." : friendlyOtpError(error));
+        return;
+      }
+      toast.success("Phone number verified.");
+      setPending(null);
+      setNumber("");
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resend() {
+    if (!pending) return;
+    setBusy(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ phone: pending.phone });
+      if (error) throw error;
+      const now = Date.now();
+      setPending({ ...pending, sentAtMs: now, resendStartedAtMs: now, attempts: 0 });
+      toast.success(GENERIC_CODE_MESSAGE);
+    } catch (err) {
+      toast.error(friendlyOtpError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-5 border-t border-border pt-5">
+      <h3 className="text-sm font-semibold">{currentPhone ? "Change phone number" : "Add a phone number"}</h3>
+      <p className="mt-1 text-xs leading-5 text-muted-foreground">
+        Used for sign-in codes. We verify it with a text message before it takes effect.
+      </p>
+      {!pending ? (
+        <form onSubmit={(event) => void sendCode(event)} className="mt-3 flex flex-wrap items-end gap-3">
+          <div className="space-y-2">
+            <Label htmlFor="security-country">Country code</Label>
+            <select
+              id="security-country"
+              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+              value={dial}
+              onChange={(event) => setDial(event.target.value)}
+            >
+              {COUNTRY_CODES.map((country) => (
+                <option key={country.iso} value={country.dial}>
+                  {country.name} (+{country.dial})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="min-w-40 flex-1 space-y-2">
+            <Label htmlFor="security-phone">Phone number</Label>
+            <Input
+              id="security-phone"
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel-national"
+              placeholder="98765 43210"
+              value={number}
+              onChange={(event) => setNumber(event.target.value)}
+              maxLength={20}
+              required
+            />
+          </div>
+          <Button type="submit" variant="outline" disabled={busy}>
+            {busy ? "Sending…" : "Send verification code"}
+          </Button>
+        </form>
+      ) : (
+        <div className="mt-3 space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Code sent to <span className="font-medium text-foreground">{pending.phone}</span>.
+          </p>
+          <OtpVerifyPanel
+            sentAtMs={pending.sentAtMs}
+            resendStartedAtMs={pending.resendStartedAtMs}
+            attempts={pending.attempts}
+            busy={busy}
+            onVerify={(code) => void verify(code)}
+            onResend={() => void resend()}
+          />
+          <Button type="button" variant="ghost" onClick={() => setPending(null)}>
+            Cancel
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Settings → Security: change or set a password, verified contacts, sign out everywhere.
 export function SecurityCard({ email, emailConfirmed, phone, phoneConfirmed, hasPassword }: SecurityCardProps) {
   const navigate = useNavigate();
