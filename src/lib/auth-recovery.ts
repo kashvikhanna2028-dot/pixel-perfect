@@ -55,8 +55,8 @@ export function normalizePhoneToE164(dialCode: string, nationalNumber: string): 
     digits = digits.slice(dial.length);
   }
   const e164 = `+${dial}${digits}`;
-  // E.164: '+' followed by 7–15 digits.
-  return /^\+[1-9]\d{6,14}$/.test(e164) ? e164 : null;
+  // E.164 in this app: '+' followed by 8–15 digits to avoid unusably short numbers.
+  return /^\+[1-9]\d{7,14}$/.test(e164) ? e164 : null;
 }
 
 export interface PasswordStrength {
