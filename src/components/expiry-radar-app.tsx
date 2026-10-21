@@ -40,6 +40,15 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
+import { OtpVerifyPanel, SecurityCard } from "@/components/auth-recovery";
+import {
+  COUNTRY_CODES,
+  DEFAULT_COUNTRY_DIAL,
+  GENERIC_CODE_MESSAGE,
+  attemptsExhausted,
+  friendlyOtpError,
+  normalizePhoneToE164,
+} from "@/lib/auth-recovery";
 import {
   dateTimeFieldToIso,
   formatCountdown,
@@ -244,14 +253,29 @@ function Feature({
   );
 }
 
+type AuthMethod = "password" | "email_code" | "phone_code";
+
+interface OtpSession {
+  channel: "email" | "phone";
+  target: string; // email address or E.164 phone
+  sentAtMs: number;
+  resendStartedAtMs: number;
+  attempts: number;
+}
+
 export function AuthPage() {
   const navigate = useNavigate();
+  const [method, setMethod] = useState<AuthMethod>("password");
   const [mode, setMode] = useState<"signup" | "login">("signup");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [countryDial, setCountryDial] = useState(DEFAULT_COUNTRY_DIAL);
+  const [countryQuery, setCountryQuery] = useState("");
+  const [nationalNumber, setNationalNumber] = useState("");
+  const [otp, setOtp] = useState<OtpSession | null>(null);
   const emailSchema = z.string().trim().email().max(255);
 
   useEffect(() => {
@@ -326,6 +350,116 @@ export function AuthPage() {
     }
   }
 
+  async function sendEmailCode(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setMessage("");
+    const parsedEmail = emailSchema.safeParse(email);
+    if (!parsedEmail.success) {
+      setMessage("Enter a valid email address.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email: parsedEmail.data,
+        options: { shouldCreateUser: true },
+      });
+      if (error) throw error;
+      const now = Date.now();
+      setOtp({ channel: "email", target: parsedEmail.data, sentAtMs: now, resendStartedAtMs: now, attempts: 0 });
+      setMessage(GENERIC_CODE_MESSAGE);
+    } catch (error) {
+      setMessage(friendlyOtpError(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function sendPhoneCode(event?: FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
+    setMessage("");
+    const e164 = normalizePhoneToE164(countryDial, nationalNumber);
+    if (!e164) {
+      setMessage("Enter a valid phone number for the selected country code.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const { error } = await supabase.auth.signInWithOtp({ phone: e164 });
+      if (error) throw error;
+      const now = Date.now();
+      setOtp({ channel: "phone", target: e164, sentAtMs: now, resendStartedAtMs: now, attempts: 0 });
+      setMessage(GENERIC_CODE_MESSAGE);
+    } catch (error) {
+      setMessage(friendlyOtpError(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resendCode() {
+    if (!otp) return;
+    setMessage("");
+    setBusy(true);
+    try {
+      const { error } = await supabase.auth.signInWithOtp(
+        otp.channel === "email"
+          ? { email: otp.target, options: { shouldCreateUser: true } }
+          : { phone: otp.target },
+      );
+      if (error) throw error;
+      const now = Date.now();
+      setOtp({ ...otp, sentAtMs: now, resendStartedAtMs: now, attempts: 0 });
+      setMessage(GENERIC_CODE_MESSAGE);
+    } catch (error) {
+      setMessage(friendlyOtpError(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function verifyCode(code: string) {
+    if (!otp || attemptsExhausted(otp.attempts)) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      const { error } = await supabase.auth.verifyOtp(
+        otp.channel === "email"
+          ? { email: otp.target, token: code, type: "email" }
+          : { phone: otp.target, token: code, type: "sms" },
+      );
+      if (error) {
+        const attempts = otp.attempts + 1;
+        setOtp({ ...otp, attempts });
+        if (attemptsExhausted(attempts)) {
+          setMessage("Too many attempts, try again in a few minutes.");
+        } else {
+          setMessage(friendlyOtpError(error));
+        }
+        return;
+      }
+      await navigate({ to: "/dashboard" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const filteredCountries = COUNTRY_CODES.filter((country) => {
+    const query = countryQuery.trim().toLowerCase();
+    if (!query) return true;
+    return (
+      country.name.toLowerCase().includes(query) ||
+      country.dial.includes(query.replace(/^\+/, "")) ||
+      country.iso.toLowerCase() === query
+    );
+  });
+
+  const methodTabs: { value: AuthMethod; label: string }[] = [
+    { value: "password", label: "Password" },
+    { value: "email_code", label: "Email code" },
+    { value: "phone_code", label: "Phone code" },
+  ];
+
   return (
     <main className="grid min-h-screen bg-background lg:grid-cols-[1fr_0.88fr]">
       <aside className="relative hidden min-h-screen overflow-hidden bg-foreground lg:block">
@@ -366,114 +500,267 @@ export function AuthPage() {
           </span>
           <p className="mt-7 text-sm font-medium text-primary">Your next reset starts here</p>
           <h1 className="mt-2 text-3xl font-semibold">
-            {mode === "signup" ? "Make room for more." : "Welcome back."}
+            {method === "password" && mode === "signup" ? "Make room for more." : "Welcome back."}
           </h1>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            {mode === "signup"
+            {method === "password" && mode === "signup"
               ? "Create an account and keep every allowance in view."
               : "Sign in to pick up right where you left off."}
           </p>
-          <div className="mt-7 grid grid-cols-2 gap-1 border-b border-border text-sm">
-            <Button
-              type="button"
-              variant="ghost"
-              aria-pressed={mode === "signup"}
-              onClick={() => {
-                setMode("signup");
-                setMessage("");
-              }}
-              className={`h-auto justify-center rounded-none border-b-2 pb-3 font-medium hover:bg-transparent ${mode === "signup" ? "border-primary text-foreground" : "border-transparent text-muted-foreground"}`}
-            >
-              Create account
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              aria-pressed={mode === "login"}
-              onClick={() => {
-                setMode("login");
-                setMessage("");
-              }}
-              className={`h-auto justify-center rounded-none border-b-2 pb-3 font-medium hover:bg-transparent ${mode === "login" ? "border-primary text-foreground" : "border-transparent text-muted-foreground"}`}
-            >
-              Log in
-            </Button>
+          <div className="mt-7 grid grid-cols-3 gap-1 border-b border-border text-sm" role="tablist" aria-label="Sign-in method">
+            {methodTabs.map((tab) => (
+              <Button
+                key={tab.value}
+                type="button"
+                variant="ghost"
+                role="tab"
+                aria-selected={method === tab.value}
+                onClick={() => {
+                  setMethod(tab.value);
+                  setMessage("");
+                  setOtp(null);
+                }}
+                className={`h-auto justify-center rounded-none border-b-2 pb-3 font-medium hover:bg-transparent ${method === tab.value ? "border-primary text-foreground" : "border-transparent text-muted-foreground"}`}
+              >
+                {tab.label}
+              </Button>
+            ))}
           </div>
-          <form onSubmit={submit} className="mt-6 space-y-4">
-            {mode === "signup" && (
+
+          {method === "password" && (
+            <>
+              <div className="mt-5 grid grid-cols-2 gap-1 text-sm">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  aria-pressed={mode === "signup"}
+                  onClick={() => {
+                    setMode("signup");
+                    setMessage("");
+                  }}
+                  className={`h-auto justify-center rounded-md font-medium ${mode === "signup" ? "bg-accent text-foreground" : "text-muted-foreground"}`}
+                >
+                  Create account
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  aria-pressed={mode === "login"}
+                  onClick={() => {
+                    setMode("login");
+                    setMessage("");
+                  }}
+                  className={`h-auto justify-center rounded-md font-medium ${mode === "login" ? "bg-accent text-foreground" : "text-muted-foreground"}`}
+                >
+                  Log in
+                </Button>
+              </div>
+              <form onSubmit={submit} className="mt-5 space-y-4">
+                {mode === "signup" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="displayName">Your name</Label>
+                    <Input
+                      id="displayName"
+                      autoComplete="name"
+                      value={displayName}
+                      onChange={(event) => setDisplayName(event.target.value)}
+                      maxLength={80}
+                      required
+                    />
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email address</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    autoComplete="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    maxLength={255}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="password">Password</Label>
+                    {mode === "login" && (
+                      <Link
+                        to="/forgot-password"
+                        className="text-xs text-primary hover:underline"
+                      >
+                        Forgot password?
+                      </Link>
+                    )}
+                  </div>
+                  <Input
+                    id="password"
+                    type="password"
+                    autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    minLength={8}
+                    maxLength={128}
+                    required
+                  />
+                </div>
+                {message && (
+                  <p
+                    role="status"
+                    className="rounded-md border border-warning/50 bg-warning/10 px-3 py-2.5 text-sm text-foreground"
+                  >
+                    {message}
+                  </p>
+                )}
+                <Button className="w-full" type="submit" disabled={busy}>
+                  {busy ? "One moment…" : mode === "signup" ? "Create your account" : "Log in"}
+                  <ArrowRight />
+                </Button>
+              </form>
+              <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
+                <span className="h-px flex-1 bg-border" />
+                or continue with
+                <span className="h-px flex-1 bg-border" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => void socialSignIn("google")}
+                >
+                  Google
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => void socialSignIn("lovable")}
+                >
+                  Lovable
+                </Button>
+              </div>
+            </>
+          )}
+
+          {method === "email_code" && !otp && (
+            <form onSubmit={(event) => void sendEmailCode(event)} className="mt-6 space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="displayName">Your name</Label>
+                <Label htmlFor="otp-email">Email address</Label>
                 <Input
-                  id="displayName"
-                  autoComplete="name"
-                  value={displayName}
-                  onChange={(event) => setDisplayName(event.target.value)}
-                  maxLength={80}
+                  id="otp-email"
+                  type="email"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  maxLength={255}
                   required
                 />
+                <p className="text-xs leading-5 text-muted-foreground">
+                  We'll email you a 6-digit code. New here? Your account is created when you
+                  verify it.
+                </p>
               </div>
-            )}
-            <div className="space-y-2">
-              <Label htmlFor="email">Email address</Label>
-              <Input
-                id="email"
-                type="email"
-                autoComplete="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                maxLength={255}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                autoComplete={mode === "signup" ? "new-password" : "current-password"}
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                minLength={8}
-                maxLength={128}
-                required
-              />
-            </div>
-            {message && (
-              <p
-                role="status"
-                className="rounded-md border border-warning/50 bg-warning/10 px-3 py-2.5 text-sm text-foreground"
-              >
-                {message}
+              {message && (
+                <p role="status" className="rounded-md border border-warning/50 bg-warning/10 px-3 py-2.5 text-sm">
+                  {message}
+                </p>
+              )}
+              <Button className="w-full" type="submit" disabled={busy}>
+                {busy ? "Sending…" : "Send code"}
+                <ArrowRight />
+              </Button>
+            </form>
+          )}
+
+          {method === "phone_code" && !otp && (
+            <form onSubmit={(event) => void sendPhoneCode(event)} className="mt-6 space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="country-search">Country code</Label>
+                <Input
+                  id="country-search"
+                  placeholder="Search country or code…"
+                  value={countryQuery}
+                  onChange={(event) => setCountryQuery(event.target.value)}
+                  aria-label="Search country codes"
+                />
+                <select
+                  aria-label="Country calling code"
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  value={countryDial}
+                  onChange={(event) => setCountryDial(event.target.value)}
+                >
+                  {filteredCountries.map((country) => (
+                    <option key={country.iso} value={country.dial}>
+                      {country.name} (+{country.dial})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="phone-number">Phone number</Label>
+                <div className="flex gap-2">
+                  <span className="grid h-10 w-16 shrink-0 place-items-center rounded-md border border-input bg-muted text-sm">
+                    +{countryDial}
+                  </span>
+                  <Input
+                    id="phone-number"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel-national"
+                    placeholder="98765 43210"
+                    value={nationalNumber}
+                    onChange={(event) => setNationalNumber(event.target.value)}
+                    maxLength={20}
+                    required
+                  />
+                </div>
+              </div>
+              {message && (
+                <p role="status" className="rounded-md border border-warning/50 bg-warning/10 px-3 py-2.5 text-sm">
+                  {message}
+                </p>
+              )}
+              <Button className="w-full" type="submit" disabled={busy}>
+                {busy ? "Sending…" : "Text me a code"}
+                <ArrowRight />
+              </Button>
+            </form>
+          )}
+
+          {otp && (
+            <div className="mt-6 space-y-4">
+              <p className="text-sm leading-6 text-muted-foreground">
+                Enter the 6-digit code we sent to{" "}
+                <span className="font-medium text-foreground">{otp.target}</span>.
               </p>
-            )}
-            <Button className="w-full" type="submit" disabled={busy}>
-              {busy ? "One moment…" : mode === "signup" ? "Create your account" : "Log in"}
-              <ArrowRight />
-            </Button>
-          </form>
-          <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
-            <span className="h-px flex-1 bg-border" />
-            or continue with
-            <span className="h-px flex-1 bg-border" />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              disabled={busy}
-              onClick={() => void socialSignIn("google")}
-            >
-              Google
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={busy}
-              onClick={() => void socialSignIn("lovable")}
-            >
-              Lovable
-            </Button>
-          </div>
+              {message && (
+                <p role="status" className="rounded-md border border-warning/50 bg-warning/10 px-3 py-2.5 text-sm">
+                  {message}
+                </p>
+              )}
+              <OtpVerifyPanel
+                sentAtMs={otp.sentAtMs}
+                resendStartedAtMs={otp.resendStartedAtMs}
+                attempts={otp.attempts}
+                busy={busy}
+                onVerify={(code) => void verifyCode(code)}
+                onResend={() => void resendCode()}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full"
+                onClick={() => {
+                  setOtp(null);
+                  setMessage("");
+                }}
+              >
+                Use a different {otp.channel === "email" ? "email" : "number"}
+              </Button>
+            </div>
+          )}
+
           <p className="mt-5 text-center text-xs leading-5 text-muted-foreground">
             By continuing, you agree to use your account for your own personal trackers.
           </p>
