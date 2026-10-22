@@ -107,3 +107,31 @@ include the billing date; unrated keys include the month, so new events are unre
 ## Tests
 
 Run `bunx vitest run src/lib/subscriptions.test.ts src/lib/expiry-radar.test.ts src/test/app-routing.test.tsx src/lib/subscription-notifications.test.ts src/lib/subscription-reminders.test.ts`.
+
+## Pro upgrades with Razorpay
+
+Settings shows an **Upgrade to Expiry Radar Pro** card with two plans: ₹149/month and
+₹1,199/year. Checkout runs in Razorpay's own window (UPI, cards, netbanking, wallets);
+card details never touch this app. The server creates each order with the price from
+`src/lib/pro-plans.ts`, verifies the checkout signature (HMAC SHA256, constant-time),
+confirms capture with Razorpay, and grants Pro in the `entitlements` table. A signed
+webhook at `/api/public/razorpay-webhook` confirms `payment.captured`/`payment.failed`
+server-to-server, so access is granted even if the browser closes after paying.
+Owners can read their own `payments` rows; all writes are service-role only.
+
+### Activate live payments
+
+The code ships inactive: without keys the card explains payments are not connected.
+
+1. Apply `drizzle/migrations/0006_razorpay_payments.sql` to the Supabase project
+   (SQL Editor → paste → run).
+2. In Lovable project settings, add server-side secrets `RAZORPAY_KEY_ID` and
+   `RAZORPAY_KEY_SECRET` from the Razorpay dashboard (test keys first, then live).
+3. Generate a strong random `RAZORPAY_WEBHOOK_SECRET` and save it the same way.
+4. In the Razorpay dashboard → Webhooks, add
+   `https://life-expiry-guide.lovable.app/api/public/razorpay-webhook` with that secret
+   and the `payment.captured` and `payment.failed` events.
+5. Publish the app, then buy a test plan with Razorpay test card details before going live.
+
+Keys are server secrets: never commit them, never expose them to the browser, and
+rotate them if they are ever pasted into chat, code, or tickets.

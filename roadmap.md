@@ -19,8 +19,9 @@
 - [ ] Add tests (OTP input, timers, phone normalization, generic messaging, route protection); run tests and build.
 
 ## Razorpay payments backend
-- [ ] Migration: payments + entitlements tables with RLS (owner read, server-only writes).
-- [ ] Price config file: Pro ₹149/month, ₹1,199/year, one-time orders.
-- [ ] Authenticated server fns: createOrder (server-side price, created row, returns order_id + key id) and verifyPayment (HMAC SHA256, constant-time, ownership check, idempotent pro_until extension).
-- [ ] Webhook /api/public/razorpay-webhook: verify X-Razorpay-Signature on raw body, 401 if invalid, idempotent payment.captured/payment.failed.
-- [ ] Request RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, RAZORPAY_WEBHOOK_SECRET as server secrets; never expose to client.
+- [x] Migration: payments + entitlements tables with RLS (owner read, server-only writes).
+- [x] Price config file: Pro ₹149/month, ₹1,199/year, one-time orders.
+- [x] Authenticated server fns: createOrder (server-side price, created row, returns order_id + key id) and verifyPayment (HMAC SHA256, constant-time, ownership check, idempotent pro_until extension).
+- [x] Webhook /api/public/razorpay-webhook: verify X-Razorpay-Signature on raw body, 401 if invalid, idempotent payment.captured/payment.failed.
+- [x] Settings Pro card loads Razorpay Checkout, starts the order, verifies the payment, and shows the active plan.
+- [ ] Activate live payments — add RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, RAZORPAY_WEBHOOK_SECRET as server secrets, apply migration 0006, register the webhook URL, publish.
