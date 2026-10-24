@@ -65,6 +65,7 @@ import {
 import { SubscriptionNotificationBell, SubscriptionOverview } from "@/components/subscriptions";
 import { demoSubscriptions, currencies } from "@/lib/subscriptions";
 import { ReminderEmailSettings } from "@/components/reminder-email-settings";
+import { ProUpgradeCard } from "@/components/pro-upgrade";
 import { useQueryClient } from "@tanstack/react-query";
 import editorialStillLife from "@/assets/expiry-radar-still-life.jpg";
 
@@ -366,7 +367,13 @@ export function AuthPage() {
       });
       if (error) throw error;
       const now = Date.now();
-      setOtp({ channel: "email", target: parsedEmail.data, sentAtMs: now, resendStartedAtMs: now, attempts: 0 });
+      setOtp({
+        channel: "email",
+        target: parsedEmail.data,
+        sentAtMs: now,
+        resendStartedAtMs: now,
+        attempts: 0,
+      });
       setMessage(GENERIC_CODE_MESSAGE);
     } catch (error) {
       setMessage(friendlyOtpError(error));
@@ -388,7 +395,13 @@ export function AuthPage() {
       const { error } = await supabase.auth.signInWithOtp({ phone: e164 });
       if (error) throw error;
       const now = Date.now();
-      setOtp({ channel: "phone", target: e164, sentAtMs: now, resendStartedAtMs: now, attempts: 0 });
+      setOtp({
+        channel: "phone",
+        target: e164,
+        sentAtMs: now,
+        resendStartedAtMs: now,
+        attempts: 0,
+      });
       setMessage(GENERIC_CODE_MESSAGE);
     } catch (error) {
       setMessage(friendlyOtpError(error));
@@ -507,7 +520,11 @@ export function AuthPage() {
               ? "Create an account and keep every allowance in view."
               : "Sign in to pick up right where you left off."}
           </p>
-          <div className="mt-7 grid grid-cols-3 gap-1 border-b border-border text-sm" role="tablist" aria-label="Sign-in method">
+          <div
+            className="mt-7 grid grid-cols-3 gap-1 border-b border-border text-sm"
+            role="tablist"
+            aria-label="Sign-in method"
+          >
             {methodTabs.map((tab) => (
               <Button
                 key={tab.value}
@@ -585,10 +602,7 @@ export function AuthPage() {
                   <div className="flex items-center justify-between">
                     <Label htmlFor="password">Password</Label>
                     {mode === "login" && (
-                      <Link
-                        to="/forgot-password"
-                        className="text-xs text-primary hover:underline"
-                      >
+                      <Link to="/forgot-password" className="text-xs text-primary hover:underline">
                         Forgot password?
                       </Link>
                     )}
@@ -657,12 +671,15 @@ export function AuthPage() {
                   required
                 />
                 <p className="text-xs leading-5 text-muted-foreground">
-                  We'll email you a 6-digit code. New here? Your account is created when you
-                  verify it.
+                  We'll email you a 6-digit code. New here? Your account is created when you verify
+                  it.
                 </p>
               </div>
               {message && (
-                <p role="status" className="rounded-md border border-warning/50 bg-warning/10 px-3 py-2.5 text-sm">
+                <p
+                  role="status"
+                  className="rounded-md border border-warning/50 bg-warning/10 px-3 py-2.5 text-sm"
+                >
                   {message}
                 </p>
               )}
@@ -717,7 +734,10 @@ export function AuthPage() {
                 </div>
               </div>
               {message && (
-                <p role="status" className="rounded-md border border-warning/50 bg-warning/10 px-3 py-2.5 text-sm">
+                <p
+                  role="status"
+                  className="rounded-md border border-warning/50 bg-warning/10 px-3 py-2.5 text-sm"
+                >
                   {message}
                 </p>
               )}
@@ -735,7 +755,10 @@ export function AuthPage() {
                 <span className="font-medium text-foreground">{otp.target}</span>.
               </p>
               {message && (
-                <p role="status" className="rounded-md border border-warning/50 bg-warning/10 px-3 py-2.5 text-sm">
+                <p
+                  role="status"
+                  className="rounded-md border border-warning/50 bg-warning/10 px-3 py-2.5 text-sm"
+                >
                   {message}
                 </p>
               )}
@@ -1001,7 +1024,8 @@ export function DashboardPage() {
   const atRisk = active.filter(
     (item) =>
       (item.next_reset_at || item.expires_at) &&
-      new Date(item.next_reset_at ?? item.expires_at ?? "").getTime() - now.getTime() <= 7 * 86_400_000 &&
+      new Date(item.next_reset_at ?? item.expires_at ?? "").getTime() - now.getTime() <=
+        7 * 86_400_000 &&
       isUnused(item),
   );
   const riskValue = atRisk.reduce((sum, item) => sum + unusedValue(item), 0);
@@ -2049,7 +2073,13 @@ export function HistoryPage() {
 export function SettingsPage() {
   const queryClient = useQueryClient();
   const [demoBusy, setDemoBusy] = useState(false);
-  const [profile, setProfile] = useState({ display_name: "", timezone: currentTimeZone(), default_currency: "USD", renewal_reminder_days: 3, email_reminders_enabled: false });
+  const [profile, setProfile] = useState({
+    display_name: "",
+    timezone: currentTimeZone(),
+    default_currency: "USD",
+    renewal_reminder_days: 3,
+    email_reminders_enabled: false,
+  });
   const [userId, setUserId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -2065,7 +2095,9 @@ export function SettingsPage() {
       if (!data.user) return;
       const { data: profileData } = await supabase
         .from("profiles")
-        .select("display_name, timezone, default_currency, renewal_reminder_days, email_reminders_enabled")
+        .select(
+          "display_name, timezone, default_currency, renewal_reminder_days, email_reminders_enabled",
+        )
         .eq("user_id", data.user.id)
         .maybeSingle();
       if (!alive) return;
@@ -2094,7 +2126,12 @@ export function SettingsPage() {
       toast.error("Add a name between 1 and 80 characters.");
       return;
     }
-    try { new Intl.DateTimeFormat("en", { timeZone: profile.timezone }); } catch { toast.error("Choose a valid time zone."); return; }
+    try {
+      new Intl.DateTimeFormat("en", { timeZone: profile.timezone });
+    } catch {
+      toast.error("Choose a valid time zone.");
+      return;
+    }
     setSaving(true);
     const { error } = await supabase
       .from("profiles")
@@ -2223,9 +2260,17 @@ export function SettingsPage() {
     const { error } = await supabase.from("trackers").insert(samples);
     if (error) toast.error("Demo trackers couldn’t be added.");
     else {
-      const { error: subscriptionError } = await supabase.from("subscriptions").insert(demoSubscriptions(userId, profile.default_currency, profile.timezone));
-      if (subscriptionError) toast.error("Trackers added, but demo subscriptions could not be added. Try again shortly.");
-      else { await queryClient.invalidateQueries({ queryKey: ["subscriptions"] }); toast.success("Six demo trackers and six sample subscriptions added."); }
+      const { error: subscriptionError } = await supabase
+        .from("subscriptions")
+        .insert(demoSubscriptions(userId, profile.default_currency, profile.timezone));
+      if (subscriptionError)
+        toast.error(
+          "Trackers added, but demo subscriptions could not be added. Try again shortly.",
+        );
+      else {
+        await queryClient.invalidateQueries({ queryKey: ["subscriptions"] });
+        toast.success("Six demo trackers and six sample subscriptions added.");
+      }
     }
     setDemoBusy(false);
   }
@@ -2289,9 +2334,42 @@ export function SettingsPage() {
                 ))}
             </select>
           </div>
-          <div className="space-y-2"><Label htmlFor="default-currency">Default currency</Label><select id="default-currency" className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={profile.default_currency} onChange={event => setProfile({ ...profile, default_currency: event.target.value })}>{currencies.map(currency => <option key={currency}>{currency}</option>)}</select></div>
-          <div className="space-y-2"><Label htmlFor="renewal-reminders">Remind before renewal</Label><select id="renewal-reminders" className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={profile.renewal_reminder_days} onChange={event => setProfile({ ...profile, renewal_reminder_days: Number(event.target.value) })}>{[1,3,7].map(days => <option key={days} value={days}>{days} {days === 1 ? "day" : "days"} before</option>)}</select></div>
-          <ReminderEmailSettings enabled={profile.email_reminders_enabled} onChange={email_reminders_enabled => setProfile({ ...profile, email_reminders_enabled })} />
+          <div className="space-y-2">
+            <Label htmlFor="default-currency">Default currency</Label>
+            <select
+              id="default-currency"
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              value={profile.default_currency}
+              onChange={(event) => setProfile({ ...profile, default_currency: event.target.value })}
+            >
+              {currencies.map((currency) => (
+                <option key={currency}>{currency}</option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="renewal-reminders">Remind before renewal</Label>
+            <select
+              id="renewal-reminders"
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              value={profile.renewal_reminder_days}
+              onChange={(event) =>
+                setProfile({ ...profile, renewal_reminder_days: Number(event.target.value) })
+              }
+            >
+              {[1, 3, 7].map((days) => (
+                <option key={days} value={days}>
+                  {days} {days === 1 ? "day" : "days"} before
+                </option>
+              ))}
+            </select>
+          </div>
+          <ReminderEmailSettings
+            enabled={profile.email_reminders_enabled}
+            onChange={(email_reminders_enabled) =>
+              setProfile({ ...profile, email_reminders_enabled })
+            }
+          />
         </div>
         <div className="mt-5 flex justify-end">
           <Button type="submit" disabled={saving}>
@@ -2300,13 +2378,19 @@ export function SettingsPage() {
           </Button>
         </div>
       </form>
+      <ProUpgradeCard />
       <div className="mt-5 rounded-lg border border-border bg-surface-raised p-5 sm:p-6">
         <h2 className="text-lg font-semibold">Try a filled-in radar</h2>
         <p className="mt-1 max-w-xl text-sm leading-6 text-muted-foreground">
-          Add six sample trackers and six sample subscriptions, including a free trial and yearly plans.
-          Samples are added alongside anything already here.
+          Add six sample trackers and six sample subscriptions, including a free trial and yearly
+          plans. Samples are added alongside anything already here.
         </p>
-        <Button variant="outline" className="mt-4" disabled={demoBusy} onClick={() => void loadDemo()}>
+        <Button
+          variant="outline"
+          className="mt-4"
+          disabled={demoBusy}
+          onClick={() => void loadDemo()}
+        >
           <Sparkles /> Load demo data
         </Button>
       </div>

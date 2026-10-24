@@ -14,6 +14,24 @@ export type Database = {
   }
   public: {
     Tables: {
+      entitlements: {
+        Row: {
+          pro_until: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          pro_until?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          pro_until?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       notification_reads: {
         Row: {
           id: string
@@ -31,6 +49,45 @@ export type Database = {
           id?: string
           notification_key?: string
           read_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      payments: {
+        Row: {
+          amount_paise: number
+          created_at: string
+          currency: string
+          id: string
+          plan: string
+          razorpay_order_id: string | null
+          razorpay_payment_id: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount_paise: number
+          created_at?: string
+          currency?: string
+          id?: string
+          plan: string
+          razorpay_order_id?: string | null
+          razorpay_payment_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount_paise?: number
+          created_at?: string
+          currency?: string
+          id?: string
+          plan?: string
+          razorpay_order_id?: string | null
+          razorpay_payment_id?: string | null
+          status?: string
+          updated_at?: string
           user_id?: string
         }
         Relationships: []
