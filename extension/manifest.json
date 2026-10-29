@@ -1,15 +1,16 @@
 {
   "manifest_version": 3,
   "name": "Expiry Radar Companion",
-  "version": "0.3.0",
-  "description": "Reads the AI plan usage meters you can already see on claude.ai (paid plans) and syncs readings to your Expiry Radar dashboard. Private test build.",
+  "version": "0.4.0",
+  "description": "Reads the AI plan usage you can already see - Claude paid-plan meters, GitHub Copilot included AI credits - and syncs readings to your Expiry Radar dashboard. Private test build.",
   "permissions": [
     "storage"
   ],
   "host_permissions": [
     "https://claude.ai/*",
     "https://exptrack.site/*",
-    "https://life-expiry-guide.lovable.app/*"
+    "https://life-expiry-guide.lovable.app/*",
+    "https://github.com/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -31,6 +32,15 @@
       ],
       "js": [
         "content-exptrack.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://github.com/settings/copilot*"
+      ],
+      "js": [
+        "content-copilot.js"
       ],
       "run_at": "document_idle"
     }
