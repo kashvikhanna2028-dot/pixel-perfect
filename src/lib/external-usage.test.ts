@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { matchTracker, parseUsageMessage, planUsageSync } from "@/lib/external-usage";
+import {
+  matchTracker,
+  parseSyncResult,
+  parseUsageMessage,
+  readingKey,
+  syncArgsFor,
+  usedAmountFor,
+} from "@/lib/external-usage";
 import type { Tracker } from "@/lib/expiry-radar";
 
 const tracker: Tracker = {
@@ -38,12 +45,17 @@ describe("parseUsageMessage", () => {
   it("accepts a valid extension message", () => {
     expect(parseUsageMessage(validMessage)).toEqual({
       provider: "claude",
+      id: null,
       sessionPercent: 42,
       sessionReset: "Resets in 2 hr",
       weeklyPercent: 35,
       weeklyReset: "Resets Nov 3",
       observedAt: "2026-10-29T04:00:00.000Z",
     });
+  });
+  it("passes through a reading id when present", () => {
+    const withId = { ...validMessage, reading: { ...validMessage.reading, id: "r-1" } };
+    expect(parseUsageMessage(withId)?.id).toBe("r-1");
   });
   it("rejects messages from other sources", () => {
     expect(parseUsageMessage({ ...validMessage, source: "evil" })).toBeNull();
@@ -83,25 +95,62 @@ describe("matchTracker", () => {
   });
 });
 
-describe("planUsageSync", () => {
-  it("logs the delta when usage increased", () => {
-    const plan = planUsageSync(tracker, parseUsageMessage(validMessage)!);
-    expect(plan).toEqual({ type: "log", tracker, amount: 15 });
-  });
-  it("snaps down when the provider reset first", () => {
-    const resetMsg = { ...validMessage, reading: { ...validMessage.reading, weeklyPercent: 5 } };
-    const plan = planUsageSync(tracker, parseUsageMessage(resetMsg)!);
-    expect(plan).toEqual({ type: "reset", tracker, usedAmount: 5 });
-  });
-  it("does nothing when unchanged or weekly is missing", () => {
-    const sameMsg = { ...validMessage, reading: { ...validMessage.reading, weeklyPercent: 20 } };
-    expect(planUsageSync(tracker, parseUsageMessage(sameMsg)!).type).toBe("none");
-    const noWeekly = { ...validMessage, reading: { ...validMessage.reading, weeklyPercent: null } };
-    expect(planUsageSync(tracker, parseUsageMessage(noWeekly)!).type).toBe("none");
+describe("usedAmountFor", () => {
+  it("maps a weekly percent onto the tracker total", () => {
+    const reading = parseUsageMessage(validMessage)!;
+    expect(usedAmountFor(tracker, reading)).toBe(35);
   });
   it("scales to tracker totals other than 100", () => {
-    const big = { ...tracker, total_amount: 500, used_amount: 0 };
-    const plan = planUsageSync(big, parseUsageMessage(validMessage)!);
-    expect(plan).toEqual({ type: "log", tracker: big, amount: 175 });
+    const big = { ...tracker, total_amount: 500 };
+    expect(usedAmountFor(big, parseUsageMessage(validMessage)!)).toBe(175);
+  });
+  it("returns null without a weekly figure", () => {
+    const noWeekly = { ...validMessage, reading: { ...validMessage.reading, weeklyPercent: null } };
+    expect(usedAmountFor(tracker, parseUsageMessage(noWeekly)!)).toBeNull();
+  });
+});
+
+describe("readingKey", () => {
+  it("is stable for the same captured reading and differs per capture", () => {
+    const a = parseUsageMessage(validMessage)!;
+    const later = {
+      ...validMessage,
+      reading: { ...validMessage.reading, observedAt: "2026-10-29T05:00:00.000Z" },
+    };
+    const b = parseUsageMessage(later)!;
+    expect(readingKey(a)).toBe(readingKey({ ...a }));
+    expect(readingKey(a)).not.toBe(readingKey(b));
+    expect(readingKey(a)).toBe("claude:weekly:2026-10-29T04:00:00.000Z");
+  });
+});
+
+describe("syncArgsFor", () => {
+  it("builds the RPC arguments", () => {
+    const reading = parseUsageMessage(validMessage)!;
+    expect(syncArgsFor(tracker, reading)).toEqual({
+      p_tracker_id: "t1",
+      p_used_amount: 35,
+      p_external_key: "claude:weekly:2026-10-29T04:00:00.000Z",
+    });
+  });
+  it("returns null without a weekly figure", () => {
+    const noWeekly = { ...validMessage, reading: { ...validMessage.reading, weeklyPercent: null } };
+    expect(syncArgsFor(tracker, parseUsageMessage(noWeekly)!)).toBeNull();
+  });
+});
+
+describe("parseSyncResult", () => {
+  it("accepts the RPC jsonb shapes", () => {
+    expect(parseSyncResult({ applied: true, amount: 15, used_amount: 35 })).toEqual({
+      applied: true,
+      reason: undefined,
+      amount: 15,
+      used_amount: 35,
+    });
+    expect(parseSyncResult({ applied: false, reason: "duplicate" })?.applied).toBe(false);
+  });
+  it("rejects malformed results", () => {
+    expect(parseSyncResult(null)).toBeNull();
+    expect(parseSyncResult({ applied: "yes" })).toBeNull();
   });
 });
