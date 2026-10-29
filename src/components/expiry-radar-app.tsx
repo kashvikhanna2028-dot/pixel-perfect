@@ -1046,9 +1046,16 @@ export function DashboardPage() {
       );
     };
     const apply = async (reading: ExternalUsageReading) => {
-      const summary =
-        `${reading.provider} weekly ${reading.weeklyPercent ?? "?"}%` +
-        (reading.sessionPercent !== null ? `, session ${reading.sessionPercent}%` : "");
+      const summary = reading.figures
+        ? reading.figures
+            .map((f) =>
+              f.used !== null && f.total !== null
+                ? `${reading.provider} ${f.used}/${f.total} ${f.unit ?? ""}`.trim()
+                : `${reading.provider} ${f.metric} ${f.percent ?? "?"}%`,
+            )
+            .join(", ")
+        : `${reading.provider} weekly ${reading.weeklyPercent ?? "?"}%` +
+          (reading.sessionPercent !== null ? `, session ${reading.sessionPercent}%` : "");
       // The linked figure (weekly or session) is decided once the explicitly
       // linked tracker is found below; the summary always shows both figures
       // exactly as read.
@@ -1667,7 +1674,7 @@ const trackerSchema = z
     cost_value: z.number().nonnegative().nullable(),
     notes: z.string().max(1000),
     // Explicit opt-in link for companion-extension sync. Both or neither.
-    external_provider: z.enum(["claude"]).nullable(),
+    external_provider: z.enum(["claude", "github-copilot"]).nullable(),
     external_metric: z.enum(["weekly", "session"]).nullable(),
   })
   .refine((value) => value.used_amount <= value.total_amount, {
@@ -1710,8 +1717,8 @@ export function TrackerEditorPage({ trackerId }: { trackerId?: string }) {
     timezone: currentTimeZone(),
     cost_value: "",
     notes: "",
-    external_provider: "" as "" | "claude",
-    external_metric: "weekly" as "weekly" | "session",
+    external_provider: "" as "" | "claude" | "github-copilot",
+    external_metric: "weekly" as "weekly" | "session" | "included_credits",
   });
 
   useEffect(() => {
@@ -1745,8 +1752,8 @@ export function TrackerEditorPage({ trackerId }: { trackerId?: string }) {
           timezone: data.timezone,
           cost_value: data.cost_value === null ? "" : String(data.cost_value),
           notes: data.notes,
-          external_provider: data.external_provider === "claude" ? "claude" : "",
-          external_metric: data.external_metric === "session" ? "session" : "weekly",
+          external_provider: data.external_provider === "claude" || data.external_provider === "github-copilot" ? data.external_provider : "",
+          external_metric: data.external_metric === "session" || data.external_metric === "included_credits" ? data.external_metric : "weekly",
         });
         setLoading(false);
       });
@@ -2080,13 +2087,20 @@ export function TrackerEditorPage({ trackerId }: { trackerId?: string }) {
               onChange={(event) =>
                 setForm({
                   ...form,
-                  external_provider: event.target.value === "claude" ? "claude" : "",
+                  external_provider:
+                    event.target.value === "claude" || event.target.value === "github-copilot"
+                      ? (event.target.value as "claude" | "github-copilot")
+                      : "",
+                  external_metric: event.target.value === "github-copilot" ? "included_credits" : "weekly",
                 })
               }
               className="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
             >
               <option value="">Not linked - I update this tracker myself</option>
               <option value="claude">Claude - via the Expiry Radar Companion Chrome extension</option>
+              <option value="github-copilot">
+                GitHub Copilot - via the Expiry Radar Companion Chrome extension
+              </option>
             </select>
             <p className="text-xs text-muted-foreground">
               Only a tracker you link here ever shows provider readings, and only readings from the
@@ -2096,7 +2110,7 @@ export function TrackerEditorPage({ trackerId }: { trackerId?: string }) {
               shows on paid plans; if your account has no meters page, there is nothing to sync.
             </p>
           </div>
-          {form.external_provider === "claude" && (
+          {form.external_provider !== "" && (
             <div className="space-y-2">
               <Label htmlFor="external_metric">Provider figure to show</Label>
               <select
@@ -2105,13 +2119,18 @@ export function TrackerEditorPage({ trackerId }: { trackerId?: string }) {
                 onChange={(event) =>
                   setForm({
                     ...form,
-                    external_metric: event.target.value === "session" ? "session" : "weekly",
+                    external_metric: event.target.value as "weekly" | "session" | "included_credits",
                   })
                 }
                 className="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
               >
-                <option value="weekly">Weekly usage</option>
-                <option value="session">Session (5-hour) usage</option>
+                {form.external_provider === "claude" && <option value="weekly">Weekly usage</option>}
+                {form.external_provider === "claude" && (
+                  <option value="session">Session (5-hour) usage</option>
+                )}
+                {form.external_provider === "github-copilot" && (
+                  <option value="included_credits">Included AI credits (monthly)</option>
+                )}
               </select>
               <p className="text-xs text-muted-foreground">
                 Pick the figure Claude should report on this tracker. It is displayed with its
@@ -2573,4 +2592,4 @@ export function SettingsPage() {
       </div>
     </section>
   );
-              }
+          }
