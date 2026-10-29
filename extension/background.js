@@ -1,7 +1,9 @@
 // Expiry Radar Companion - background service worker.
 // Receives readings from the Claude usage page, stores the latest one, and
 // relays it to ONE Expiry Radar tab (the most recently active one), so a
-// reading can never be applied twice by several open dashboard tabs.
+// reading can never be applied twice by several open dashboard tabs. The
+// dashboard's result ("saved" / "no change" / error) is stored separately
+// from delivery, so the popup can tell a real save from a dropped message.
 // Nothing leaves the browser except the reading going to the user's own
 // Expiry Radar tab.
 
@@ -20,22 +22,31 @@ async function appTab() {
 
 async function deliver(tabId, reading) {
   try {
-    await chrome.tabs.sendMessage(tabId, { type: 'usage-reading', reading });
-    return true;
+    // Resolves with the dashboard's result, or null if the tab is gone or
+    // the bridge is not injected there yet.
+    return (await chrome.tabs.sendMessage(tabId, { type: 'usage-reading', reading })) ?? null;
   } catch {
-    return false; // tab navigated away or bridge not injected yet
+    return null;
   }
 }
 
-async function relayToApp(reading) {
-  const tab = await appTab();
-  const delivered = tab ? await deliver(tab.id, reading) : false;
-  if (delivered) {
+async function recordResult(reading, result) {
+  if (result) {
     await chrome.storage.local.remove('pendingReading');
   } else {
     await chrome.storage.local.set({ pendingReading: reading });
   }
-  await chrome.storage.local.set({ lastReading: reading, lastDelivered: delivered ? 1 : 0 });
+  await chrome.storage.local.set({
+    lastReading: reading,
+    lastResult: result
+      ? { ok: Boolean(result.ok), detail: String(result.detail ?? ''), at: Date.now() }
+      : null,
+  });
+}
+
+async function relayToApp(reading) {
+  const tab = await appTab();
+  await recordResult(reading, tab ? await deliver(tab.id, reading) : null);
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -44,13 +55,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // async response
   }
   if (message?.type === 'app-ready') {
-    chrome.storage.local.get('pendingReading', async (items) => {
+    chrome.storage.local.get(['pendingReading', 'lastReading'], async (items) => {
       if (items.pendingReading && sender.tab?.id) {
         // Flush only to the tab that announced itself, and only if it is the
         // current single app tab target.
         const tab = await appTab();
-        if (tab && tab.id === sender.tab.id && await deliver(tab.id, items.pendingReading)) {
-          await chrome.storage.local.remove('pendingReading');
+        if (tab && tab.id === sender.tab.id) {
+          await recordResult(items.pendingReading, await deliver(tab.id, items.pendingReading));
         }
       }
       sendResponse({ ok: true });
@@ -58,10 +69,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
   if (message?.type === 'get-status') {
-    chrome.storage.local.get(['lastReading', 'lastDelivered', 'pendingReading'], (items) => {
+    chrome.storage.local.get(['lastReading', 'lastResult', 'pendingReading'], (items) => {
       sendResponse({
         lastReading: items.lastReading ?? null,
-        lastDelivered: items.lastDelivered ?? 0,
+        lastResult: items.lastResult ?? null,
         pending: Boolean(items.pendingReading),
       });
     });
