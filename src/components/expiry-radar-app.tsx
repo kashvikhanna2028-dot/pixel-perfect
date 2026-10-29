@@ -63,7 +63,7 @@ import {
   urgencyFor,
 } from "@/lib/expiry-radar";
 import {
-  matchTracker,
+  matchLinkedTracker,
   parseSyncResult,
   parseUsageMessage,
   syncArgsFor,
@@ -1046,6 +1046,9 @@ export function DashboardPage() {
       const summary =
         `${reading.provider} weekly ${reading.weeklyPercent ?? "?"}%` +
         (reading.sessionPercent !== null ? `, session ${reading.sessionPercent}%` : "");
+      // The linked figure (weekly or session) is decided once the explicitly
+      // linked tracker is found below; the summary always shows both figures
+      // exactly as read.
       const fail = (detail: string) => {
         toast.error(detail);
         report(reading, false, detail);
@@ -1059,15 +1062,16 @@ export function DashboardPage() {
         fail("Synced usage couldn't be checked against your trackers.");
         return;
       }
-      const tracker = matchTracker((fresh ?? []) as Tracker[], reading.provider, "weekly");
-      if (!tracker) {
+      const linked = matchLinkedTracker((fresh ?? []) as Tracker[], reading.provider);
+      if (!linked) {
         toast.info(`Read ${summary}. Link a tracker to this provider in its settings to sync automatically.`);
         report(reading, false, "no matching tracker");
         return;
       }
-      const args = syncArgsFor(tracker, reading);
+      const { tracker, figure } = linked;
+      const args = syncArgsFor(tracker, reading, figure);
       if (!args) {
-        report(reading, false, "no weekly figure read");
+        report(reading, false, `no ${figure} figure read`);
         return;
       }
       const { data, error } = await supabase.rpc("apply_external_usage_reading", args);
@@ -1662,6 +1666,9 @@ const trackerSchema = z
     timezone: z.string().min(1).max(80),
     cost_value: z.number().nonnegative().nullable(),
     notes: z.string().max(1000),
+    // Explicit opt-in link for companion-extension sync. Both or neither.
+    external_provider: z.enum(["claude"]).nullable(),
+    external_metric: z.enum(["weekly", "session"]).nullable(),
   })
   .refine((value) => value.used_amount <= value.total_amount, {
     path: ["used_amount"],
@@ -1703,6 +1710,8 @@ export function TrackerEditorPage({ trackerId }: { trackerId?: string }) {
     timezone: currentTimeZone(),
     cost_value: "",
     notes: "",
+    external_provider: "" as "" | "claude",
+    external_metric: "weekly" as "weekly" | "session",
   });
 
   useEffect(() => {
@@ -1736,6 +1745,8 @@ export function TrackerEditorPage({ trackerId }: { trackerId?: string }) {
           timezone: data.timezone,
           cost_value: data.cost_value === null ? "" : String(data.cost_value),
           notes: data.notes,
+          external_provider: data.external_provider === "claude" ? "claude" : "",
+          external_metric: data.external_metric === "session" ? "session" : "weekly",
         });
         setLoading(false);
       });
@@ -1808,6 +1819,8 @@ export function TrackerEditorPage({ trackerId }: { trackerId?: string }) {
       timezone: form.timezone,
       cost_value: form.cost_value === "" ? null : Number(form.cost_value),
       notes: form.notes,
+      external_provider: form.external_provider === "" ? null : form.external_provider,
+      external_metric: form.external_provider === "" ? null : form.external_metric,
     };
     const parsed = trackerSchema.safeParse(raw);
     if (!parsed.success) {
@@ -2057,6 +2070,53 @@ export function TrackerEditorPage({ trackerId }: { trackerId?: string }) {
               placeholder="Anything you want to remember…"
             />
           </div>
+        </div>
+        <div className="grid gap-5 rounded-lg border border-border bg-surface p-5">
+          <div className="space-y-2">
+            <Label htmlFor="external_provider">Automatic sync (optional)</Label>
+            <select
+              id="external_provider"
+              value={form.external_provider}
+              onChange={(event) =>
+                setForm({
+                  ...form,
+                  external_provider: event.target.value === "claude" ? "claude" : "",
+                })
+              }
+              className="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            >
+              <option value="">Not linked - I update this tracker myself</option>
+              <option value="claude">Claude - via the Expiry Radar Companion Chrome extension</option>
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Only a tracker you link here ever receives automatic readings, and a reading can only
+              move usage up, never down - your reset schedule still owns the reset. If Claude shows
+              you no usage meters (free plan), there is nothing to sync: the extension just tells
+              you when you hit a limit.
+            </p>
+          </div>
+          {form.external_provider === "claude" && (
+            <div className="space-y-2">
+              <Label htmlFor="external_metric">Usage figure to sync</Label>
+              <select
+                id="external_metric"
+                value={form.external_metric}
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    external_metric: event.target.value === "session" ? "session" : "weekly",
+                  })
+                }
+                className="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="weekly">Weekly usage</option>
+                <option value="session">Session (5-hour) usage</option>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Pick the figure whose reset rhythm matches this tracker&apos;s own reset schedule.
+              </p>
+            </div>
+          )}
         </div>
         {error && (
           <p role="alert" className="text-sm text-destructive">
@@ -2510,4 +2570,4 @@ export function SettingsPage() {
       </div>
     </section>
   );
-}
+  }
