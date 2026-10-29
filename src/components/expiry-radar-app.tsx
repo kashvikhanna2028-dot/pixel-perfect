@@ -2106,8 +2106,8 @@ export function TrackerEditorPage({ trackerId }: { trackerId?: string }) {
               Only a tracker you link here ever shows provider readings, and only readings from the
               provider&apos;s own usage page. Linking never changes this tracker&apos;s numbers:
               provider readings are saved as timestamped snapshots shown alongside it, and your
-              reset schedule alone owns the tracker&apos;s math. Sync reads the usage meters Claude
-              shows on paid plans; if your account has no meters page, there is nothing to sync.
+              reset schedule alone owns the tracker&apos;s math. Sync reads the usage figures the
+              provider shows on its own usage page; if your account has none, there is nothing to sync.
             </p>
           </div>
           {form.external_provider !== "" && (
@@ -2133,8 +2133,8 @@ export function TrackerEditorPage({ trackerId }: { trackerId?: string }) {
                 )}
               </select>
               <p className="text-xs text-muted-foreground">
-                Pick the figure Claude should report on this tracker. It is displayed with its
-                capture time and Claude&apos;s own reset text, never merged into the tracker&apos;s
+                Pick the figure the provider should report on this tracker. It is displayed with its
+                capture time and the provider&apos;s own reset text, never merged into the tracker&apos;s
                 totals - the provider&apos;s reset boundary can differ from any schedule here.
               </p>
             </div>
