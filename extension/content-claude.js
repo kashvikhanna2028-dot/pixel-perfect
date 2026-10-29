@@ -68,6 +68,7 @@
     if (!session && !weekly) return null;
     return {
       provider: 'claude',
+      id: crypto.randomUUID(),
       pageUrl: location.href,
       sessionPercent: session ? session.pct : null,
       sessionReset: session ? resetTextNear(session.el) : null,
