@@ -65,6 +65,20 @@ export function matchTracker(
 export type LinkedFigure = "weekly" | "session";
 
 /**
+ * Which provider figures may be linked to this tracker. A link is only safe
+ * when the provider's reset boundary and the tracker's own reset schedule
+ * describe the same period; otherwise increase-only writes would sit on top
+ * of an unrelated schedule and retain stale usage after the provider resets.
+ * Claude's weekly limit "resets once every week" (Anthropic), so it pairs
+ * with a weekly-reset tracker. The 5-hour session window matches none of the
+ * app's reset types, so it is not linkable until a matching reset type
+ * exists - the parser stays session-capable, the link is what is gated.
+ */
+export function linkableFiguresFor(tracker: Pick<Tracker, "reset_type">): LinkedFigure[] {
+  return tracker.reset_type === "weekly" ? ["weekly"] : [];
+}
+
+/**
  * Finds the tracker a reading applies to, preferring a weekly link. A
  * tracker syncs only when the user explicitly linked it to this provider and
  * figure; automatic sync never guesses from tracker names and never touches
@@ -76,7 +90,9 @@ export function matchLinkedTracker(
 ): { tracker: Tracker; figure: LinkedFigure } | null {
   for (const figure of ["weekly", "session"] as const) {
     const tracker = matchTracker(trackers, provider, figure);
-    if (tracker) return { tracker, figure };
+    // Defense in depth: even an explicitly linked tracker is skipped when its
+    // reset schedule cannot represent the provider figure's period.
+    if (tracker && linkableFiguresFor(tracker).includes(figure)) return { tracker, figure };
   }
   return null;
 }
