@@ -62,6 +62,12 @@ import {
   unusedValue,
   urgencyFor,
 } from "@/lib/expiry-radar";
+import {
+  matchTracker,
+  parseUsageMessage,
+  planUsageSync,
+  type ExternalUsageReading,
+} from "@/lib/external-usage";
 import { SubscriptionNotificationBell, SubscriptionOverview } from "@/components/subscriptions";
 import { demoSubscriptions, currencies } from "@/lib/subscriptions";
 import { ReminderEmailSettings } from "@/components/reminder-email-settings";
@@ -1013,6 +1019,79 @@ export function DashboardPage() {
       cancelled = true;
     };
   }, [trackers, userId]);
+
+  // Companion extension: apply readings the user captured on a provider's own
+  // usage page. Trust boundary note: this listener accepts window messages
+  // from the extension bridge on this same origin. Any script already running
+  // in this page context holds the user's full session and could write the
+  // same rows directly, so a spoofed message grants no new capability; the
+  // checks below exist to reject malformed or cross-origin noise, and every
+  // write is surfaced with a toast. Idempotence: the background relays each
+  // reading to a single dashboard tab, handlers are serialized through a
+  // promise queue, and each plan is computed from a freshly read tracker row,
+  // so a re-delivered or retried reading finds zero delta and writes nothing.
+  // Preview-scope limit: cross-tab atomicity beyond this needs a database RPC
+  // (a migration), which is intentionally out of scope for this prototype.
+  // Only increases are written: a decrease means the provider reset ahead of
+  // our schedule, surfaced as a toast instead of silently overwriting the
+  // allowance or touching usage history.
+  useEffect(() => {
+    if (!userId) return;
+    let queue: Promise<void> = Promise.resolve();
+    const apply = async (reading: ExternalUsageReading) => {
+      const summary =
+        `${reading.provider} weekly ${reading.weeklyPercent ?? "?"}%` +
+        (reading.sessionPercent !== null ? `, session ${reading.sessionPercent}%` : "");
+      // Match against fresh rows, not possibly stale state, then re-read the
+      // chosen tracker immediately before writing.
+      const { data: fresh, error: loadError } = await supabase
+        .from("trackers")
+        .select("*")
+        .eq("user_id", userId);
+      if (loadError) {
+        toast.error("Synced usage couldn’t be checked against your trackers.");
+        return;
+      }
+      const tracker = matchTracker((fresh ?? []) as Tracker[], reading.provider, "weekly");
+      if (!tracker) {
+        toast.info(`Read ${summary}. Create one tracker named after it to sync automatically.`);
+        return;
+      }
+      const { data: current, error: trackerError } = await supabase
+        .from("trackers")
+        .select("*")
+        .eq("id", tracker.id)
+        .eq("user_id", userId)
+        .single();
+      if (trackerError || !current) {
+        toast.error("Synced usage couldn’t be saved.");
+        return;
+      }
+      const plan = planUsageSync(current as Tracker, reading);
+      if (plan.type === "log") {
+        const { error } = await supabase
+          .from("usage_logs")
+          .insert({ tracker_id: tracker.id, user_id: userId, amount: plan.amount });
+        if (error) toast.error("Synced usage couldn’t be saved.");
+        else {
+          toast.success(`Synced ${summary} to ${tracker.name}.`);
+          await reload();
+        }
+      } else if (plan.type === "reset") {
+        toast.info(
+          `${reading.provider} looks reset (read ${summary}, below ${tracker.name}'s current level). Nothing changed - your next scheduled reset will catch up.`,
+        );
+      }
+    };
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      const reading = parseUsageMessage(event.data);
+      if (!reading) return;
+      queue = queue.then(() => apply(reading));
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [userId]);
 
   const active = trackers.filter(
     (item) =>
@@ -2405,4 +2484,4 @@ export function SettingsPage() {
       </div>
     </section>
   );
-}
+  }
