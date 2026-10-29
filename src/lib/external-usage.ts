@@ -1,8 +1,11 @@
 import type { Tracker } from "@/lib/expiry-radar";
 
 // Reading shape sent by the Expiry Radar Companion browser extension.
-// The extension only forwards numbers visible on the provider's own usage
-// page; this module validates and decides what (if anything) to write.
+// The extension only forwards values visible on the provider's own usage
+// page; this module validates and turns them into provider-reported
+// SNAPSHOTS. Snapshots are display-only: they never change a tracker's
+// usage counters, because the provider's reset boundary is display text we
+// cannot enforce and cadence-matching ("both weekly") is not alignment.
 
 export type ExternalUsageReading = {
   provider: string;
@@ -45,117 +48,92 @@ export function parseUsageMessage(data: unknown): ExternalUsageReading | null {
   };
 }
 
-/**
- * Finds the tracker a reading applies to. A tracker syncs only when the user
- * explicitly linked it to this provider and metric (external_provider +
- * external_metric); automatic sync never guesses from tracker names and never
- * touches a manual tracker.
- */
-export function matchTracker(
-  trackers: Tracker[],
-  provider: string,
-  figure: "weekly" | "session" = "weekly",
-): Tracker | null {
-  const linked = trackers.filter(
-    (t) => t.external_provider === provider.toLowerCase() && t.external_metric === figure,
-  );
-  return linked.length === 1 ? (linked[0] ?? null) : null;
-}
-
 export type LinkedFigure = "weekly" | "session";
 
 /**
- * Which provider figures may be linked to this tracker. A link is only safe
- * when the provider's reset boundary and the tracker's own reset schedule
- * describe the same period; otherwise increase-only writes would sit on top
- * of an unrelated schedule and retain stale usage after the provider resets.
- * Claude's weekly limit "resets once every week" (Anthropic), so it pairs
- * with a weekly-reset tracker. The 5-hour session window matches none of the
- * app's reset types, so it is not linkable until a matching reset type
- * exists - the parser stays session-capable, the link is what is gated.
- */
-export function linkableFiguresFor(tracker: Pick<Tracker, "reset_type">): LinkedFigure[] {
-  return tracker.reset_type === "weekly" ? ["weekly"] : [];
-}
-
-/**
- * Finds the tracker a reading applies to, preferring a weekly link. A
- * tracker syncs only when the user explicitly linked it to this provider and
- * figure; automatic sync never guesses from tracker names and never touches
- * a manual tracker.
+ * Finds the tracker a reading is associated with for display. Association
+ * requires an explicit user link (external_provider + external_metric);
+ * provider readings never attach to manual trackers and are never matched
+ * by name. No reset-schedule gate is needed here because snapshots never
+ * write into the tracker's counters - the link is a display association,
+ * not a sync channel.
  */
 export function matchLinkedTracker(
   trackers: Tracker[],
   provider: string,
 ): { tracker: Tracker; figure: LinkedFigure } | null {
   for (const figure of ["weekly", "session"] as const) {
-    const tracker = matchTracker(trackers, provider, figure);
-    // Defense in depth: even an explicitly linked tracker is skipped when its
-    // reset schedule cannot represent the provider figure's period.
-    if (tracker && linkableFiguresFor(tracker).includes(figure)) return { tracker, figure };
+    const linked = trackers.filter(
+      (t) => t.external_provider === provider.toLowerCase() && t.external_metric === figure,
+    );
+    if (linked.length === 1) return { tracker: linked[0]!, figure };
   }
   return null;
 }
 
-/**
- * Stable dedupe key for one captured reading. The same reading re-delivered
- * (retry, second dashboard tab) carries the same key, so the database can
- * reject the duplicate. A new capture on the usage page gets a new key.
- */
-export function readingKey(reading: ExternalUsageReading, figure: LinkedFigure = "weekly"): string {
+/** Stable dedupe key for one captured reading figure. */
+export function readingKey(reading: ExternalUsageReading, figure: LinkedFigure): string {
   return `${reading.provider}:${figure}:${reading.observedAt}`;
 }
 
-/** Absolute used amount the reading implies for the tracker, rounded to cents. */
-export function usedAmountFor(
-  tracker: Tracker,
+/** Verbatim percent + reset text a figure carries, or null when absent. */
+export function figureValues(
   reading: ExternalUsageReading,
-  figure: LinkedFigure = "weekly",
-): number | null {
+  figure: LinkedFigure,
+): { percent: number; resetText: string | null } | null {
   const percent = figure === "weekly" ? reading.weeklyPercent : reading.sessionPercent;
   if (percent === null) return null;
-  return Math.round((percent / 100) * tracker.total_amount * 100) / 100;
-}
-
-/** Arguments for the apply_external_usage_reading RPC. */
-export function syncArgsFor(
-  tracker: Tracker,
-  reading: ExternalUsageReading,
-  figure: LinkedFigure = "weekly",
-): {
-  p_tracker_id: string;
-  p_used_amount: number;
-  p_external_key: string;
-  p_provider: string;
-  p_metric: LinkedFigure;
-} | null {
-  const used = usedAmountFor(tracker, reading, figure);
-  if (used === null) return null;
   return {
-    p_tracker_id: tracker.id,
-    p_used_amount: used,
-    p_external_key: readingKey(reading, figure),
-    p_provider: reading.provider,
-    p_metric: figure,
+    percent,
+    resetText: figure === "weekly" ? reading.weeklyReset : reading.sessionReset,
   };
 }
 
-export type SyncResult = {
+/** Arguments for the record_external_usage_snapshot RPC. */
+export function snapshotArgsFor(
+  tracker: Tracker | null,
+  reading: ExternalUsageReading,
+  figure: LinkedFigure,
+): {
+  p_tracker_id: string | null;
+  p_provider: string;
+  p_metric: LinkedFigure;
+  p_percent: number;
+  p_used_amount: null;
+  p_total_amount: null;
+  p_unit: string;
+  p_reset_text: string | null;
+  p_observed_at: string;
+  p_external_key: string;
+} | null {
+  const values = figureValues(reading, figure);
+  if (!values) return null;
+  return {
+    p_tracker_id: tracker?.id ?? null,
+    p_provider: reading.provider,
+    p_metric: figure,
+    p_percent: values.percent,
+    p_used_amount: null,
+    p_total_amount: null,
+    p_unit: "percent",
+    p_reset_text: values.resetText,
+    p_observed_at: reading.observedAt,
+    p_external_key: readingKey(reading, figure),
+  };
+}
+
+export type SnapshotResult = {
   applied: boolean;
   reason?: string | undefined;
-  amount?: number | undefined;
-  used_amount?: number | undefined;
 };
 
 /** Interprets the RPC's jsonb return. */
-export function parseSyncResult(data: unknown): SyncResult | null {
+export function parseSnapshotResult(data: unknown): SnapshotResult | null {
   if (typeof data !== "object" || data === null) return null;
   const r = data as Record<string, unknown>;
   if (typeof r["applied"] !== "boolean") return null;
   return {
     applied: r["applied"],
     reason: typeof r["reason"] === "string" ? r["reason"] : undefined,
-    amount: typeof r["amount"] === "number" ? r["amount"] : undefined,
-    used_amount: typeof r["used_amount"] === "number" ? r["used_amount"] : undefined,
   };
 }
