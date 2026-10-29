@@ -50,6 +50,13 @@ async function relayToApp(reading) {
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type === 'limit-notice' && message.notice) {
+    // Free-plan limit notices are stored for the popup only. They carry no
+    // usage figure (free limits vary with demand), so they are NEVER relayed
+    // to the dashboard - there is nothing honest to write.
+    chrome.storage.local.set({ lastLimitNotice: message.notice }, () => sendResponse({ ok: true }));
+    return true;
+  }
   if (message?.type === 'usage-reading') {
     relayToApp(message.reading).then(() => sendResponse({ ok: true }));
     return true; // async response
@@ -69,11 +76,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
   if (message?.type === 'get-status') {
-    chrome.storage.local.get(['lastReading', 'lastResult', 'pendingReading'], (items) => {
+    chrome.storage.local.get(['lastReading', 'lastResult', 'pendingReading', 'lastLimitNotice'], (items) => {
       sendResponse({
         lastReading: items.lastReading ?? null,
         lastResult: items.lastResult ?? null,
         pending: Boolean(items.pendingReading),
+        lastLimitNotice: items.lastLimitNotice ?? null,
       });
     });
     return true;
