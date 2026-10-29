@@ -7,6 +7,16 @@ import type { Tracker } from "@/lib/expiry-radar";
 // usage counters, because the provider's reset boundary is display text we
 // cannot enforce and cadence-matching ("both weekly") is not alignment.
 
+/** One provider figure, verbatim from the provider's own page. */
+export type UsageFigure = {
+  metric: string;
+  percent: number | null;
+  used: number | null;
+  total: number | null;
+  unit: string | null;
+  resetText: string | null;
+};
+
 export type ExternalUsageReading = {
   provider: string;
   id: string | null;
@@ -15,6 +25,8 @@ export type ExternalUsageReading = {
   weeklyPercent: number | null;
   weeklyReset: string | null;
   observedAt: string;
+  /** Generic per-provider figures (used by non-Claude readers). */
+  figures?: UsageFigure[] | undefined;
 };
 
 const EXTENSION_SOURCE = "expiry-radar-extension";
@@ -37,6 +49,24 @@ export function parseUsageMessage(data: unknown): ExternalUsageReading | null {
   const sessionReset = reading["sessionReset"];
   const weeklyReset = reading["weeklyReset"];
   const id = reading["id"];
+  const figuresRaw = Array.isArray(reading["figures"]) ? reading["figures"] : undefined;
+  const figures: UsageFigure[] | undefined = figuresRaw
+    ?.map((f): UsageFigure | null => {
+      if (typeof f !== "object" || f === null) return null;
+      const fr = f as Record<string, unknown>;
+      if (typeof fr["metric"] !== "string" || !fr["metric"]) return null;
+      const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+      const str = (v: unknown) => (typeof v === "string" && v ? v : null);
+      return {
+        metric: fr["metric"],
+        percent: asPercent(fr["percent"]),
+        used: num(fr["used"]),
+        total: num(fr["total"]),
+        unit: str(fr["unit"]),
+        resetText: str(fr["resetText"]),
+      };
+    })
+    .filter((f): f is UsageFigure => f !== null);
   return {
     provider: (reading["provider"] as string).toLowerCase(),
     id: typeof id === "string" && id ? id : null,
@@ -45,7 +75,17 @@ export function parseUsageMessage(data: unknown): ExternalUsageReading | null {
     weeklyPercent: asPercent(reading["weeklyPercent"]),
     weeklyReset: typeof weeklyReset === "string" ? weeklyReset : null,
     observedAt,
+    figures: figures && figures.length > 0 ? figures : undefined,
   };
+}
+
+/** Metrics a reading actually carries: generic figures, else Claude's two. */
+export function readingMetrics(reading: ExternalUsageReading): string[] {
+  if (reading.figures) return reading.figures.map((f) => f.metric);
+  const out: string[] = [];
+  if (reading.weeklyPercent !== null) out.push("weekly");
+  if (reading.sessionPercent !== null) out.push("session");
+  return out;
 }
 
 export type LinkedFigure = "weekly" | "session";
@@ -61,30 +101,37 @@ export type LinkedFigure = "weekly" | "session";
 export function matchLinkedTracker(
   trackers: Tracker[],
   provider: string,
-): { tracker: Tracker; figure: LinkedFigure } | null {
-  for (const figure of ["weekly", "session"] as const) {
-    const linked = trackers.filter(
-      (t) => t.external_provider === provider.toLowerCase() && t.external_metric === figure,
-    );
-    if (linked.length === 1) return { tracker: linked[0]!, figure };
+): { tracker: Tracker; figure: string } | null {
+  const linked = trackers.filter((t) => t.external_provider === provider.toLowerCase());
+  if (linked.length === 1 && linked[0]!.external_metric) {
+    return { tracker: linked[0]!, figure: linked[0]!.external_metric };
   }
   return null;
 }
 
 /** Stable dedupe key for one captured reading figure. */
-export function readingKey(reading: ExternalUsageReading, figure: LinkedFigure): string {
+export function readingKey(reading: ExternalUsageReading, figure: string): string {
   return `${reading.provider}:${figure}:${reading.observedAt}`;
 }
 
-/** Verbatim percent + reset text a figure carries, or null when absent. */
+/** Verbatim values a figure carries, or null when absent from the reading. */
 export function figureValues(
   reading: ExternalUsageReading,
-  figure: LinkedFigure,
-): { percent: number; resetText: string | null } | null {
-  const percent = figure === "weekly" ? reading.weeklyPercent : reading.sessionPercent;
+  figure: string,
+): { percent: number | null; used: number | null; total: number | null; unit: string | null; resetText: string | null } | null {
+  if (reading.figures) {
+    const f = reading.figures.find((x) => x.metric === figure);
+    if (!f) return null;
+    if (f.percent === null && f.used === null) return null;
+    return { percent: f.percent, used: f.used, total: f.total, unit: f.unit, resetText: f.resetText };
+  }
+  const percent = figure === "weekly" ? reading.weeklyPercent : figure === "session" ? reading.sessionPercent : null;
   if (percent === null) return null;
   return {
     percent,
+    used: null,
+    total: null,
+    unit: "percent",
     resetText: figure === "weekly" ? reading.weeklyReset : reading.sessionReset,
   };
 }
@@ -93,15 +140,15 @@ export function figureValues(
 export function snapshotArgsFor(
   tracker: Tracker | null,
   reading: ExternalUsageReading,
-  figure: LinkedFigure,
+  figure: string,
 ): {
   p_tracker_id: string | null;
   p_provider: string;
-  p_metric: LinkedFigure;
-  p_percent: number;
-  p_used_amount: null;
-  p_total_amount: null;
-  p_unit: string;
+  p_metric: string;
+  p_percent: number | null;
+  p_used_amount: number | null;
+  p_total_amount: number | null;
+  p_unit: string | null;
   p_reset_text: string | null;
   p_observed_at: string;
   p_external_key: string;
@@ -113,9 +160,9 @@ export function snapshotArgsFor(
     p_provider: reading.provider,
     p_metric: figure,
     p_percent: values.percent,
-    p_used_amount: null,
-    p_total_amount: null,
-    p_unit: "percent",
+    p_used_amount: values.used,
+    p_total_amount: values.total,
+    p_unit: values.unit,
     p_reset_text: values.resetText,
     p_observed_at: reading.observedAt,
     p_external_key: readingKey(reading, figure),
