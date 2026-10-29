@@ -12,9 +12,15 @@ OpenAI does not show a comparable usage meter for it.
    page.
 2. When your Expiry Radar dashboard (exptrack.site) is open in a tab, the
    reading is handed to the page, which saves it with your existing signed-in
-   session: an increase logs the delta to the matching tracker; a decrease
-   means the provider reset first, so the tracker snaps to the new value.
-3. Syncing matches **one** tracker whose name contains the provider name
+   session through the `apply_external_usage_reading` database function. That
+   function locks the tracker row, rejects a reading it has already applied,
+   and only ever writes an increase - a decrease means the provider reset
+   first, and your own reset schedule catches up. Nothing is written
+   backwards or twice.
+3. The popup shows what happened: "saved to dashboard" means the database
+   confirmed the write; "not saved" or "waiting for dashboard tab" means it
+   did not. Delivery and saving are reported separately on purpose.
+4. Syncing matches **one** tracker whose name contains the provider name
    (e.g. "Claude Pro"). The built-in "Claude Pro" preset works: weekly reset,
    total 100. If no tracker (or several) matches, the reading is shown as a
    toast and nothing is saved.
@@ -46,6 +52,9 @@ OpenAI does not show a comparable usage meter for it.
 
 ## Known limits of this build
 
+- Sync requires the `drizzle/migrations/0007_external_usage_sync.sql`
+  migration to be applied to the app's Supabase project. Until it is, the
+  dashboard shows "automatic sync is in preview" and saves nothing.
 - The Claude page reading is text-pattern based (it looks for "Current
   session"/"Weekly" labels and nearby percentages). Anthropic can change the
   page layout; if numbers stop appearing, the parser needs an update.
