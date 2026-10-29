@@ -2484,4 +2484,4 @@ export function SettingsPage() {
       </div>
     </section>
   );
-  }
+}
