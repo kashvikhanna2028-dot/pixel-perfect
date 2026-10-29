@@ -63,11 +63,10 @@ import {
   urgencyFor,
 } from "@/lib/expiry-radar";
 import {
-  linkableFiguresFor,
   matchLinkedTracker,
-  parseSyncResult,
+  parseSnapshotResult,
   parseUsageMessage,
-  syncArgsFor,
+  snapshotArgsFor,
   type ExternalUsageReading,
 } from "@/lib/external-usage";
 import { SubscriptionNotificationBell, SubscriptionOverview } from "@/components/subscriptions";
@@ -1029,11 +1028,14 @@ export function DashboardPage() {
   // same rows directly, so a spoofed message grants no new capability; the
   // checks below exist to reject malformed or cross-origin noise, and every
   // outcome is surfaced with a toast and reported back to the extension.
-  // Idempotence is enforced in the database: apply_external_usage_reading
-  // locks the tracker row, rejects an already-applied reading key, writes
-  // only increases, and never moves usage backwards (the app's reset
-  // schedule owns decreases). If the migration is not applied yet the RPC is
-  // missing and nothing is written - the preview fails closed, never open.
+  // Readings are stored as timestamped provider snapshots, never written
+  // into a tracker's counters: the provider's reset boundary is display text
+  // the app cannot enforce, so provider numbers stay alongside the tracker,
+  // whose own reset schedule alone owns its math. Idempotence is enforced
+  // in the database: record_external_usage_snapshot rejects an
+  // already-recorded reading key. If the migration is not applied yet the
+  // RPC is missing and nothing is written - the preview fails closed,
+  // never open.
   useEffect(() => {
     if (!userId) return;
     let queue: Promise<void> = Promise.resolve();
@@ -1070,12 +1072,12 @@ export function DashboardPage() {
         return;
       }
       const { tracker, figure } = linked;
-      const args = syncArgsFor(tracker, reading, figure);
+      const args = snapshotArgsFor(tracker, reading, figure);
       if (!args) {
         report(reading, false, `no ${figure} figure read`);
         return;
       }
-      const { data, error } = await supabase.rpc("apply_external_usage_reading", args);
+      const { data, error } = await supabase.rpc("record_external_usage_snapshot", args);
       if (error) {
         // Function missing means the migration is not applied: fail closed.
         if (error.code === "PGRST202" || /could not find the function/i.test(error.message)) {
@@ -1088,13 +1090,15 @@ export function DashboardPage() {
         fail("Synced usage couldn't be saved.");
         return;
       }
-      const result = parseSyncResult(data);
+      const result = parseSnapshotResult(data);
       if (!result) {
-        fail("Synced usage couldn't be saved.");
+        fail("The provider reading couldn't be saved.");
         return;
       }
       if (result.applied) {
-        toast.success(`Synced ${summary} to ${tracker.name}.`);
+        toast.success(
+          `Saved ${reading.provider}'s reading (${summary}) to ${tracker.name} as a provider snapshot. The tracker's own numbers are unchanged.`,
+        );
         report(reading, true, "saved");
         await reload();
         return;
@@ -1103,16 +1107,11 @@ export function DashboardPage() {
         report(reading, true, "already synced");
         return;
       }
-      if (result.reason === "no increase") {
-        if (result.used_amount !== undefined && args.p_used_amount < result.used_amount) {
-          toast.info(
-            `${reading.provider} looks reset (read ${summary}, below ${tracker.name}'s current level). Nothing changed - your next scheduled reset will catch up.`,
-          );
-        }
-        report(reading, true, "no change");
+      if (result.reason === "tracker not linked") {
+        report(reading, false, "tracker not linked");
         return;
       }
-      fail("Synced usage couldn't be saved.");
+      fail("The provider reading couldn't be saved.");
     };
     const onMessage = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return;
@@ -1820,16 +1819,8 @@ export function TrackerEditorPage({ trackerId }: { trackerId?: string }) {
       timezone: form.timezone,
       cost_value: form.cost_value === "" ? null : Number(form.cost_value),
       notes: form.notes,
-      external_provider:
-        form.external_provider === "" ||
-        !linkableFiguresFor({ reset_type: form.reset_type }).includes(form.external_metric)
-          ? null
-          : form.external_provider,
-      external_metric:
-        form.external_provider === "" ||
-        !linkableFiguresFor({ reset_type: form.reset_type }).includes(form.external_metric)
-          ? null
-          : form.external_metric,
+      external_provider: form.external_provider === "" ? null : form.external_provider,
+      external_metric: form.external_provider === "" ? null : form.external_metric,
     };
     const parsed = trackerSchema.safeParse(raw);
     if (!parsed.success) {
@@ -2098,42 +2089,37 @@ export function TrackerEditorPage({ trackerId }: { trackerId?: string }) {
               <option value="claude">Claude - via the Expiry Radar Companion Chrome extension</option>
             </select>
             <p className="text-xs text-muted-foreground">
-              Only a tracker you link here ever receives automatic readings, and a reading can only
-              move usage up, never down - your reset schedule still owns the reset. Sync reads the
-              usage meters Claude shows on paid plans; if your account has no meters page, there is
-              nothing to sync.
+              Only a tracker you link here ever shows provider readings, and only readings from the
+              provider&apos;s own usage page. Linking never changes this tracker&apos;s numbers:
+              provider readings are saved as timestamped snapshots shown alongside it, and your
+              reset schedule alone owns the tracker&apos;s math. Sync reads the usage meters Claude
+              shows on paid plans; if your account has no meters page, there is nothing to sync.
             </p>
           </div>
-          {form.external_provider === "claude" &&
-            (linkableFiguresFor({ reset_type: form.reset_type }).length > 0 ? (
-              <div className="space-y-2">
-                <Label htmlFor="external_metric">Usage figure to sync</Label>
-                <select
-                  id="external_metric"
-                  value={form.external_metric}
-                  onChange={(event) =>
-                    setForm({
-                      ...form,
-                      external_metric: event.target.value === "session" ? "session" : "weekly",
-                    })
-                  }
-                  className="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                >
-                  <option value="weekly">Weekly usage</option>
-                </select>
-                <p className="text-xs text-muted-foreground">
-                  Only the weekly figure is offered: Claude&apos;s weekly limit resets once a week,
-                  the same rhythm as this tracker. The 5-hour session window matches no tracker
-                  reset type, so it stays unlinkable rather than drifting out of sync.
-                </p>
-              </div>
-            ) : (
+          {form.external_provider === "claude" && (
+            <div className="space-y-2">
+              <Label htmlFor="external_metric">Provider figure to show</Label>
+              <select
+                id="external_metric"
+                value={form.external_metric}
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    external_metric: event.target.value === "session" ? "session" : "weekly",
+                  })
+                }
+                className="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="weekly">Weekly usage</option>
+                <option value="session">Session (5-hour) usage</option>
+              </select>
               <p className="text-xs text-muted-foreground">
-                Automatic sync needs this tracker to reset weekly, the same rhythm as Claude&apos;s
-                weekly limit. Change the reset schedule above to weekly, or leave the tracker
-                unlinked - a mismatched schedule would keep stale usage after the provider resets.
+                Pick the figure Claude should report on this tracker. It is displayed with its
+                capture time and Claude&apos;s own reset text, never merged into the tracker&apos;s
+                totals - the provider&apos;s reset boundary can differ from any schedule here.
               </p>
-            ))}
+            </div>
+          )}
         </div>
         {error && (
           <p role="alert" className="text-sm text-destructive">
@@ -2587,4 +2573,4 @@ export function SettingsPage() {
       </div>
     </section>
   );
-  }
+              }
