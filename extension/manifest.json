@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Expiry Radar Companion",
-  "version": "0.1.0",
-  "description": "Reads AI plan usage you can already see on claude.ai and syncs it to your Expiry Radar dashboard. Private test build.",
+  "version": "0.2.0",
+  "description": "Reads AI plan usage you can already see on claude.ai - usage meters on paid plans, limit/reset notices on the free plan - and syncs meter readings to your Expiry Radar dashboard. Private test build.",
   "permissions": [
     "storage"
   ],
@@ -31,6 +31,16 @@
       ],
       "js": [
         "content-exptrack.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://claude.ai/chat/*",
+        "https://claude.ai/new*"
+      ],
+      "js": [
+        "content-notice.js"
       ],
       "run_at": "document_idle"
     }
