@@ -144,3 +144,53 @@ describe("parseSnapshotResult", () => {
     expect(parseSnapshotResult({ reason: "duplicate" })).toBeNull();
   });
 });
+
+describe("generic provider figures (GitHub Copilot)", () => {
+  const copilotReading = {
+    provider: "github-copilot",
+    id: "c1",
+    sessionPercent: null,
+    sessionReset: null,
+    weeklyPercent: null,
+    weeklyReset: null,
+    observedAt: "2026-10-29T10:00:00.000Z",
+    figures: [
+      {
+        metric: "included_credits",
+        percent: null,
+        used: 172,
+        total: 200,
+        unit: "AI credits",
+        resetText: "Resets in 3 days on Nov 1, 2026",
+      },
+    ],
+  };
+
+  it("parses verbatim used/total/unit figures", () => {
+    const parsed = parseUsageMessage({
+      source: "expiry-radar-extension",
+      type: "usage-reading",
+      reading: copilotReading,
+    });
+    expect(parsed?.provider).toBe("github-copilot");
+    expect(parsed?.figures?.[0]?.used).toBe(172);
+    expect(parsed?.figures?.[0]?.total).toBe(200);
+    expect(parsed?.figures?.[0]?.unit).toBe("AI credits");
+  });
+
+  it("matches a tracker linked to the copilot metric", () => {
+    const t = makeTracker({ external_provider: "github-copilot", external_metric: "included_credits" });
+    const linked = matchLinkedTracker([t], "github-copilot");
+    expect(linked?.figure).toBe("included_credits");
+  });
+
+  it("snapshot args carry used/total verbatim, never a computed percent", () => {
+    const t = makeTracker({ external_provider: "github-copilot", external_metric: "included_credits" });
+    const args = snapshotArgsFor(t, copilotReading, "included_credits");
+    expect(args?.p_used_amount).toBe(172);
+    expect(args?.p_total_amount).toBe(200);
+    expect(args?.p_unit).toBe("AI credits");
+    expect(args?.p_percent).toBeNull();
+    expect(args?.p_reset_text).toBe("Resets in 3 days on Nov 1, 2026");
+  });
+});
