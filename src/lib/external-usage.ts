@@ -62,40 +62,65 @@ export function matchTracker(
   return linked.length === 1 ? (linked[0] ?? null) : null;
 }
 
+export type LinkedFigure = "weekly" | "session";
+
+/**
+ * Finds the tracker a reading applies to, preferring a weekly link. A
+ * tracker syncs only when the user explicitly linked it to this provider and
+ * figure; automatic sync never guesses from tracker names and never touches
+ * a manual tracker.
+ */
+export function matchLinkedTracker(
+  trackers: Tracker[],
+  provider: string,
+): { tracker: Tracker; figure: LinkedFigure } | null {
+  for (const figure of ["weekly", "session"] as const) {
+    const tracker = matchTracker(trackers, provider, figure);
+    if (tracker) return { tracker, figure };
+  }
+  return null;
+}
+
 /**
  * Stable dedupe key for one captured reading. The same reading re-delivered
  * (retry, second dashboard tab) carries the same key, so the database can
  * reject the duplicate. A new capture on the usage page gets a new key.
  */
-export function readingKey(reading: ExternalUsageReading): string {
-  return `${reading.provider}:weekly:${reading.observedAt}`;
+export function readingKey(reading: ExternalUsageReading, figure: LinkedFigure = "weekly"): string {
+  return `${reading.provider}:${figure}:${reading.observedAt}`;
 }
 
 /** Absolute used amount the reading implies for the tracker, rounded to cents. */
-export function usedAmountFor(tracker: Tracker, reading: ExternalUsageReading): number | null {
-  if (reading.weeklyPercent === null) return null;
-  return Math.round((reading.weeklyPercent / 100) * tracker.total_amount * 100) / 100;
+export function usedAmountFor(
+  tracker: Tracker,
+  reading: ExternalUsageReading,
+  figure: LinkedFigure = "weekly",
+): number | null {
+  const percent = figure === "weekly" ? reading.weeklyPercent : reading.sessionPercent;
+  if (percent === null) return null;
+  return Math.round((percent / 100) * tracker.total_amount * 100) / 100;
 }
 
 /** Arguments for the apply_external_usage_reading RPC. */
 export function syncArgsFor(
   tracker: Tracker,
   reading: ExternalUsageReading,
+  figure: LinkedFigure = "weekly",
 ): {
   p_tracker_id: string;
   p_used_amount: number;
   p_external_key: string;
   p_provider: string;
-  p_metric: "weekly" | "session";
+  p_metric: LinkedFigure;
 } | null {
-  const used = usedAmountFor(tracker, reading);
+  const used = usedAmountFor(tracker, reading, figure);
   if (used === null) return null;
   return {
     p_tracker_id: tracker.id,
     p_used_amount: used,
-    p_external_key: readingKey(reading),
+    p_external_key: readingKey(reading, figure),
     p_provider: reading.provider,
-    p_metric: "weekly",
+    p_metric: figure,
   };
 }
 
