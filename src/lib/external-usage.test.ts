@@ -73,25 +73,25 @@ describe("parseUsageMessage", () => {
 });
 
 describe("matchTracker", () => {
-  it("matches the single tracker containing the provider name", () => {
-    expect(matchTracker([tracker], "claude")?.id).toBe("t1");
+  it("matches the tracker explicitly linked to the provider and metric", () => {
+    const linked = { ...tracker, external_provider: "claude", external_metric: "weekly" };
+    expect(matchTracker([tracker, linked], "claude", "weekly")?.id).toBe("tw" in linked ? "" : linked.id);
   });
-  it("returns null when zero trackers match", () => {
-    expect(matchTracker([], "claude")).toBeNull();
+  it("never matches an unlinked (manual) tracker, even when the name fits", () => {
+    expect(matchTracker([tracker], "claude", "weekly")).toBeNull();
+    const named = { ...tracker, name: "Claude weekly" };
+    expect(matchTracker([named], "claude", "weekly")).toBeNull();
   });
-  it("prefers the weekly-named tracker for weekly figures", () => {
-    const weekly = { ...tracker, id: "tw", name: "Claude weekly" };
-    const session = { ...tracker, id: "ts", name: "Claude session" };
-    expect(matchTracker([weekly, session], "claude", "weekly")?.id).toBe("tw");
-    expect(matchTracker([weekly, session], "claude", "session")?.id).toBe("ts");
+  it("does not match a tracker linked to a different metric or provider", () => {
+    const session = { ...tracker, external_provider: "claude", external_metric: "session" };
+    expect(matchTracker([session], "claude", "weekly")).toBeNull();
+    const other = { ...tracker, external_provider: "chatgpt", external_metric: "weekly" };
+    expect(matchTracker([other], "claude", "weekly")).toBeNull();
   });
-  it("refuses to guess when two trackers carry the same keyword", () => {
-    const a = { ...tracker, id: "ta", name: "Claude weekly home" };
-    const b = { ...tracker, id: "tb", name: "Claude weekly work" };
+  it("refuses to guess when two trackers carry the same link", () => {
+    const a = { ...tracker, id: "ta", external_provider: "claude", external_metric: "weekly" };
+    const b = { ...tracker, id: "tb", external_provider: "claude", external_metric: "weekly" };
     expect(matchTracker([a, b], "claude", "weekly")).toBeNull();
-  });
-  it("ignores a generic match for session figures without a session tracker", () => {
-    expect(matchTracker([tracker], "claude", "session")).toBeNull();
   });
 });
 
@@ -131,6 +131,8 @@ describe("syncArgsFor", () => {
       p_tracker_id: "t1",
       p_used_amount: 35,
       p_external_key: "claude:weekly:2026-10-29T04:00:00.000Z",
+      p_provider: "claude",
+      p_metric: "weekly",
     });
   });
   it("returns null without a weekly figure", () => {
