@@ -3,6 +3,11 @@
 -- usage page plus a stable key, so concurrent captures, duplicated delivery
 -- and client retries can never double-apply or move usage backwards.
 
+-- Explicit per-tracker opt-in: automatic sync writes only to a tracker the
+-- user has linked to a provider + metric. Manual trackers are never touched.
+ALTER TABLE public.trackers ADD COLUMN external_provider text;
+ALTER TABLE public.trackers ADD COLUMN external_metric text;
+
 ALTER TABLE public.usage_logs ADD COLUMN external_key text;
 CREATE UNIQUE INDEX usage_logs_external_key_uniq
   ON public.usage_logs (external_key)
@@ -11,7 +16,9 @@ CREATE UNIQUE INDEX usage_logs_external_key_uniq
 CREATE OR REPLACE FUNCTION public.apply_external_usage_reading(
   p_tracker_id uuid,
   p_used_amount numeric,
-  p_external_key text
+  p_external_key text,
+  p_provider text DEFAULT 'claude',
+  p_metric text DEFAULT 'weekly'
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -34,6 +41,12 @@ BEGIN
 
   IF NOT FOUND THEN
     RETURN jsonb_build_object('applied', false, 'reason', 'tracker not found');
+  END IF;
+
+  -- The tracker must be explicitly linked to this provider + metric.
+  IF v_tracker.external_provider IS DISTINCT FROM p_provider
+     OR v_tracker.external_metric IS DISTINCT FROM p_metric THEN
+    RETURN jsonb_build_object('applied', false, 'reason', 'tracker not linked');
   END IF;
 
   -- The exact reading was already applied (retry or duplicate delivery).
@@ -63,6 +76,6 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.apply_external_usage_reading(uuid, numeric, text) FROM public;
-REVOKE ALL ON FUNCTION public.apply_external_usage_reading(uuid, numeric, text) FROM anon;
-GRANT EXECUTE ON FUNCTION public.apply_external_usage_reading(uuid, numeric, text) TO authenticated;
+REVOKE ALL ON FUNCTION public.apply_external_usage_reading(uuid, numeric, text, text, text) FROM public;
+REVOKE ALL ON FUNCTION public.apply_external_usage_reading(uuid, numeric, text, text, text) FROM anon;
+GRANT EXECUTE ON FUNCTION public.apply_external_usage_reading(uuid, numeric, text, text, text) TO authenticated;
