@@ -6,17 +6,13 @@ import type { Tracker } from "@/lib/expiry-radar";
 
 export type ExternalUsageReading = {
   provider: string;
+  id: string | null;
   sessionPercent: number | null;
   sessionReset: string | null;
   weeklyPercent: number | null;
   weeklyReset: string | null;
   observedAt: string;
 };
-
-export type SyncPlan =
-  | { type: "log"; tracker: Tracker; amount: number }
-  | { type: "reset"; tracker: Tracker; usedAmount: number }
-  | { type: "none"; reason: string };
 
 const EXTENSION_SOURCE = "expiry-radar-extension";
 
@@ -37,8 +33,10 @@ export function parseUsageMessage(data: unknown): ExternalUsageReading | null {
   if (typeof observedAt !== "string" || Number.isNaN(Date.parse(observedAt))) return null;
   const sessionReset = reading["sessionReset"];
   const weeklyReset = reading["weeklyReset"];
+  const id = reading["id"];
   return {
     provider: (reading["provider"] as string).toLowerCase(),
+    id: typeof id === "string" && id ? id : null,
     sessionPercent: asPercent(reading["sessionPercent"]),
     sessionReset: typeof sessionReset === "string" ? sessionReset : null,
     weeklyPercent: asPercent(reading["weeklyPercent"]),
@@ -69,16 +67,46 @@ export function matchTracker(
 }
 
 /**
- * Decides how to apply a reading to a tracker. The tracker models the same
- * weekly allowance, so the reported percent maps to an absolute used amount.
- * Increase → log the delta (the DB trigger applies it atomically).
- * Decrease → the provider reset before our schedule; snap used_amount down.
+ * Stable dedupe key for one captured reading. The same reading re-delivered
+ * (retry, second dashboard tab) carries the same key, so the database can
+ * reject the duplicate. A new capture on the usage page gets a new key.
  */
-export function planUsageSync(tracker: Tracker, reading: ExternalUsageReading): SyncPlan {
-  if (reading.weeklyPercent === null) return { type: "none", reason: "no weekly figure read" };
-  const usedAbsolute = Math.round((reading.weeklyPercent / 100) * tracker.total_amount * 100) / 100;
-  const delta = Math.round((usedAbsolute - tracker.used_amount) * 100) / 100;
-  if (delta > 0) return { type: "log", tracker, amount: delta };
-  if (delta < 0) return { type: "reset", tracker, usedAmount: usedAbsolute };
-  return { type: "none", reason: "no change" };
+export function readingKey(reading: ExternalUsageReading): string {
+  return `${reading.provider}:weekly:${reading.observedAt}`;
+}
+
+/** Absolute used amount the reading implies for the tracker, rounded to cents. */
+export function usedAmountFor(tracker: Tracker, reading: ExternalUsageReading): number | null {
+  if (reading.weeklyPercent === null) return null;
+  return Math.round((reading.weeklyPercent / 100) * tracker.total_amount * 100) / 100;
+}
+
+/** Arguments for the apply_external_usage_reading RPC. */
+export function syncArgsFor(
+  tracker: Tracker,
+  reading: ExternalUsageReading,
+): { p_tracker_id: string; p_used_amount: number; p_external_key: string } | null {
+  const used = usedAmountFor(tracker, reading);
+  if (used === null) return null;
+  return { p_tracker_id: tracker.id, p_used_amount: used, p_external_key: readingKey(reading) };
+}
+
+export type SyncResult = {
+  applied: boolean;
+  reason?: string | undefined;
+  amount?: number | undefined;
+  used_amount?: number | undefined;
+};
+
+/** Interprets the RPC's jsonb return. */
+export function parseSyncResult(data: unknown): SyncResult | null {
+  if (typeof data !== "object" || data === null) return null;
+  const r = data as Record<string, unknown>;
+  if (typeof r["applied"] !== "boolean") return null;
+  return {
+    applied: r["applied"],
+    reason: typeof r["reason"] === "string" ? r["reason"] : undefined,
+    amount: typeof r["amount"] === "number" ? r["amount"] : undefined,
+    used_amount: typeof r["used_amount"] === "number" ? r["used_amount"] : undefined,
+  };
 }
