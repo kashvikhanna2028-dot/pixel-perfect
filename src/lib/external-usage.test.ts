@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  matchLinkedTracker,
   matchTracker,
   parseSyncResult,
   parseUsageMessage,
@@ -154,5 +155,54 @@ describe("parseSyncResult", () => {
   it("rejects malformed results", () => {
     expect(parseSyncResult(null)).toBeNull();
     expect(parseSyncResult({ applied: "yes" })).toBeNull();
+  });
+});
+
+describe("linked figure selection (weekly preferred, session supported)", () => {
+  const linked = (metric: "weekly" | "session"): Tracker => ({
+    ...tracker,
+    id: `t-${metric}`,
+    external_provider: "claude",
+    external_metric: metric,
+  });
+  const reading = {
+    provider: "claude",
+    id: "r1",
+    sessionPercent: 42,
+    sessionReset: null,
+    weeklyPercent: 35,
+    weeklyReset: null,
+    observedAt: "2026-10-29T04:00:00.000Z",
+  };
+
+  it("matchLinkedTracker prefers the weekly link when both exist", () => {
+    const found = matchLinkedTracker([linked("session"), linked("weekly")], "claude");
+    expect(found?.tracker.id).toBe("t-weekly");
+    expect(found?.figure).toBe("weekly");
+  });
+
+  it("matchLinkedTracker falls back to a session link", () => {
+    const found = matchLinkedTracker([linked("session")], "claude");
+    expect(found?.tracker.id).toBe("t-session");
+    expect(found?.figure).toBe("session");
+  });
+
+  it("matchLinkedTracker returns null without an explicit link", () => {
+    expect(matchLinkedTracker([tracker], "claude")).toBeNull();
+  });
+
+  it("syncArgsFor uses the session figure and keys by it", () => {
+    const args = syncArgsFor(linked("session"), reading, "session");
+    expect(args?.p_used_amount).toBe(42);
+    expect(args?.p_metric).toBe("session");
+    expect(args?.p_external_key).toBe("claude:session:2026-10-29T04:00:00.000Z");
+  });
+
+  it("usedAmountFor returns null when the linked figure was not read", () => {
+    expect(usedAmountFor(linked("weekly"), { ...reading, weeklyPercent: null }, "weekly")).toBeNull();
+  });
+
+  it("readingKey defaults to weekly for backwards compatibility", () => {
+    expect(readingKey(reading)).toBe("claude:weekly:2026-10-29T04:00:00.000Z");
   });
 });
