@@ -267,6 +267,8 @@ export type Database = {
           cost_value: number | null
           created_at: string
           expires_at: string | null
+          external_metric: string | null
+          external_provider: string | null
           id: string
           name: string
           next_reset_at: string | null
@@ -285,6 +287,8 @@ export type Database = {
           cost_value?: number | null
           created_at?: string
           expires_at?: string | null
+          external_metric?: string | null
+          external_provider?: string | null
           id?: string
           name: string
           next_reset_at?: string | null
@@ -303,6 +307,8 @@ export type Database = {
           cost_value?: number | null
           created_at?: string
           expires_at?: string | null
+          external_metric?: string | null
+          external_provider?: string | null
           id?: string
           name?: string
           next_reset_at?: string | null
@@ -321,6 +327,7 @@ export type Database = {
       usage_logs: {
         Row: {
           amount: number
+          external_key: string | null
           id: string
           logged_at: string
           tracker_id: string
@@ -328,6 +335,7 @@ export type Database = {
         }
         Insert: {
           amount: number
+          external_key?: string | null
           id?: string
           logged_at?: string
           tracker_id: string
@@ -335,6 +343,7 @@ export type Database = {
         }
         Update: {
           amount?: number
+          external_key?: string | null
           id?: string
           logged_at?: string
           tracker_id?: string
@@ -355,6 +364,21 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      record_external_usage_snapshot: {
+        Args: {
+          p_tracker_id: string | null
+          p_provider: string
+          p_metric: string
+          p_percent: number | null
+          p_used_amount: number | null
+          p_total_amount: number | null
+          p_unit: string | null
+          p_reset_text: string | null
+          p_observed_at: string
+          p_external_key: string
+        }
+        Returns: Json
+      }
       advance_subscription_date: {
         Args: { anchor: string; cycle: string; d: string; days: number }
         Returns: string

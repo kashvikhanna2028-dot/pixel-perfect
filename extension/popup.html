@@ -1,0 +1,29 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body { font-family: system-ui, sans-serif; width: 300px; margin: 0; padding: 14px; font-size: 13px; color: #1a1a1a; }
+      h1 { font-size: 14px; margin: 0 0 8px; }
+      h2 { font-size: 12px; margin: 10px 0 2px; color: #444; text-transform: uppercase; letter-spacing: 0.04em; }
+      .row { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-bottom: 1px solid #eee; }
+      .row strong { text-align: right; font-weight: 600; }
+      .muted { color: #777; font-size: 12px; margin-top: 8px; }
+      .none { color: #777; }
+    </style>
+  </head>
+  <body>
+    <h1>Expiry Radar Companion</h1>
+    <div id="status">Loading…</div>
+    <p class="muted">
+      Open claude.ai → Settings → Usage (paid plans) and the meters Claude
+      displays sync to a linked tracker when your dashboard is open.
+    </p>
+    <p class="muted">
+      Captures age: reopen the usage page to refresh them. If Claude shows
+      your account no meters, there is nothing to capture and nothing is
+      invented.
+    </p>
+    <script src="popup.js"></script>
+  </body>
+</html>

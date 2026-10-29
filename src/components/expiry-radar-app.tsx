@@ -62,6 +62,13 @@ import {
   unusedValue,
   urgencyFor,
 } from "@/lib/expiry-radar";
+import {
+  matchLinkedTracker,
+  parseSnapshotResult,
+  parseUsageMessage,
+  snapshotArgsFor,
+  type ExternalUsageReading,
+} from "@/lib/external-usage";
 import { SubscriptionNotificationBell, SubscriptionOverview } from "@/components/subscriptions";
 import { demoSubscriptions, currencies } from "@/lib/subscriptions";
 import { ReminderEmailSettings } from "@/components/reminder-email-settings";
@@ -1014,6 +1021,115 @@ export function DashboardPage() {
     };
   }, [trackers, userId]);
 
+  // Companion extension: apply readings the user captured on a provider's own
+  // usage page. Trust boundary note: this listener accepts window messages
+  // from the extension bridge on this same origin. Any script already running
+  // in this page context holds the user's full session and could write the
+  // same rows directly, so a spoofed message grants no new capability; the
+  // checks below exist to reject malformed or cross-origin noise, and every
+  // outcome is surfaced with a toast and reported back to the extension.
+  // Readings are stored as timestamped provider snapshots, never written
+  // into a tracker's counters: the provider's reset boundary is display text
+  // the app cannot enforce, so provider numbers stay alongside the tracker,
+  // whose own reset schedule alone owns its math. Idempotence is enforced
+  // in the database: record_external_usage_snapshot rejects an
+  // already-recorded reading key. If the migration is not applied yet the
+  // RPC is missing and nothing is written - the preview fails closed,
+  // never open.
+  useEffect(() => {
+    if (!userId) return;
+    let queue: Promise<void> = Promise.resolve();
+    const report = (reading: ExternalUsageReading, ok: boolean, detail: string) => {
+      window.postMessage(
+        { source: "expiry-radar-app", type: "usage-result", id: reading.id, ok, detail },
+        window.location.origin,
+      );
+    };
+    const apply = async (reading: ExternalUsageReading) => {
+      const summary = reading.figures
+        ? reading.figures
+            .map((f) =>
+              f.used !== null && f.total !== null
+                ? `${reading.provider} ${f.used}/${f.total} ${f.unit ?? ""}`.trim()
+                : `${reading.provider} ${f.metric} ${f.percent ?? "?"}%`,
+            )
+            .join(", ")
+        : `${reading.provider} weekly ${reading.weeklyPercent ?? "?"}%` +
+          (reading.sessionPercent !== null ? `, session ${reading.sessionPercent}%` : "");
+      // The linked figure (weekly or session) is decided once the explicitly
+      // linked tracker is found below; the summary always shows both figures
+      // exactly as read.
+      const fail = (detail: string) => {
+        toast.error(detail);
+        report(reading, false, detail);
+      };
+      // Match against fresh rows, not possibly stale state.
+      const { data: fresh, error: loadError } = await supabase
+        .from("trackers")
+        .select("*")
+        .eq("user_id", userId);
+      if (loadError) {
+        fail("Synced usage couldn't be checked against your trackers.");
+        return;
+      }
+      const linked = matchLinkedTracker((fresh ?? []) as Tracker[], reading.provider);
+      if (!linked) {
+        toast.info(`Read ${summary}. Link a tracker to this provider in its settings to sync automatically.`);
+        report(reading, false, "no matching tracker");
+        return;
+      }
+      const { tracker, figure } = linked;
+      const args = snapshotArgsFor(tracker, reading, figure);
+      if (!args) {
+        report(reading, false, `no ${figure} figure read`);
+        return;
+      }
+      const { data, error } = await supabase.rpc("record_external_usage_snapshot", args);
+      if (error) {
+        // Function missing means the migration is not applied: fail closed.
+        if (error.code === "PGRST202" || /could not find the function/i.test(error.message)) {
+          toast.info(
+            "Automatic sync is in preview: its database update is not applied yet, so nothing was saved.",
+          );
+          report(reading, false, "sync not enabled");
+          return;
+        }
+        fail("Synced usage couldn't be saved.");
+        return;
+      }
+      const result = parseSnapshotResult(data);
+      if (!result) {
+        fail("The provider reading couldn't be saved.");
+        return;
+      }
+      if (result.applied) {
+        toast.success(
+          `Saved ${reading.provider}'s reading (${summary}) to ${tracker.name} as a provider snapshot. The tracker's own numbers are unchanged.`,
+        );
+        report(reading, true, "saved");
+        await reload();
+        return;
+      }
+      if (result.reason === "duplicate") {
+        report(reading, true, "already synced");
+        return;
+      }
+      if (result.reason === "tracker not linked") {
+        report(reading, false, "tracker not linked");
+        return;
+      }
+      fail("The provider reading couldn't be saved.");
+    };
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      const reading = parseUsageMessage(event.data);
+      if (!reading) return;
+      queue = queue.then(() => apply(reading));
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [userId]);
+
   const active = trackers.filter(
     (item) =>
       !(item.reset_type === "one_time" && item.expires_at && new Date(item.expires_at) <= now),
@@ -1557,6 +1673,9 @@ const trackerSchema = z
     timezone: z.string().min(1).max(80),
     cost_value: z.number().nonnegative().nullable(),
     notes: z.string().max(1000),
+    // Explicit opt-in link for companion-extension sync. Both or neither.
+    external_provider: z.enum(["claude", "github-copilot"]).nullable(),
+    external_metric: z.enum(["weekly", "session"]).nullable(),
   })
   .refine((value) => value.used_amount <= value.total_amount, {
     path: ["used_amount"],
@@ -1598,6 +1717,8 @@ export function TrackerEditorPage({ trackerId }: { trackerId?: string }) {
     timezone: currentTimeZone(),
     cost_value: "",
     notes: "",
+    external_provider: "" as "" | "claude" | "github-copilot",
+    external_metric: "weekly" as "weekly" | "session" | "included_credits",
   });
 
   useEffect(() => {
@@ -1631,6 +1752,8 @@ export function TrackerEditorPage({ trackerId }: { trackerId?: string }) {
           timezone: data.timezone,
           cost_value: data.cost_value === null ? "" : String(data.cost_value),
           notes: data.notes,
+          external_provider: data.external_provider === "claude" || data.external_provider === "github-copilot" ? data.external_provider : "",
+          external_metric: data.external_metric === "session" || data.external_metric === "included_credits" ? data.external_metric : "weekly",
         });
         setLoading(false);
       });
@@ -1703,6 +1826,8 @@ export function TrackerEditorPage({ trackerId }: { trackerId?: string }) {
       timezone: form.timezone,
       cost_value: form.cost_value === "" ? null : Number(form.cost_value),
       notes: form.notes,
+      external_provider: form.external_provider === "" ? null : form.external_provider,
+      external_metric: form.external_provider === "" ? null : form.external_metric,
     };
     const parsed = trackerSchema.safeParse(raw);
     if (!parsed.success) {
@@ -1952,6 +2077,68 @@ export function TrackerEditorPage({ trackerId }: { trackerId?: string }) {
               placeholder="Anything you want to remember…"
             />
           </div>
+        </div>
+        <div className="grid gap-5 rounded-lg border border-border bg-surface p-5">
+          <div className="space-y-2">
+            <Label htmlFor="external_provider">Automatic sync (optional)</Label>
+            <select
+              id="external_provider"
+              value={form.external_provider}
+              onChange={(event) =>
+                setForm({
+                  ...form,
+                  external_provider:
+                    event.target.value === "claude" || event.target.value === "github-copilot"
+                      ? (event.target.value as "claude" | "github-copilot")
+                      : "",
+                  external_metric: event.target.value === "github-copilot" ? "included_credits" : "weekly",
+                })
+              }
+              className="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            >
+              <option value="">Not linked - I update this tracker myself</option>
+              <option value="claude">Claude - via the Expiry Radar Companion Chrome extension</option>
+              <option value="github-copilot">
+                GitHub Copilot - via the Expiry Radar Companion Chrome extension
+              </option>
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Only a tracker you link here ever shows provider readings, and only readings from the
+              provider&apos;s own usage page. Linking never changes this tracker&apos;s numbers:
+              provider readings are saved as timestamped snapshots shown alongside it, and your
+              reset schedule alone owns the tracker&apos;s math. Sync reads the usage figures the
+              provider shows on its own usage page; if your account has none, there is nothing to sync.
+            </p>
+          </div>
+          {form.external_provider !== "" && (
+            <div className="space-y-2">
+              <Label htmlFor="external_metric">Provider figure to show</Label>
+              <select
+                id="external_metric"
+                value={form.external_metric}
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    external_metric: event.target.value as "weekly" | "session" | "included_credits",
+                  })
+                }
+                className="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              >
+                {form.external_provider === "claude" && <option value="weekly">Weekly usage</option>}
+                {form.external_provider === "claude" && (
+                  <option value="session">Session (5-hour) usage</option>
+                )}
+                {form.external_provider === "github-copilot" && (
+                  <option value="included_credits">Included AI credits (monthly)</option>
+                )}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Pick the figure the provider should report on this tracker. It is displayed with its
+                capture time and the provider&apos;s own reset text, never merged into the tracker&apos;s
+                totals - the provider&apos;s reset boundary can differ from any schedule here.
+              </p>
+            </div>
+          )}
         </div>
         {error && (
           <p role="alert" className="text-sm text-destructive">
@@ -2405,4 +2592,4 @@ export function SettingsPage() {
       </div>
     </section>
   );
-}
+          }
