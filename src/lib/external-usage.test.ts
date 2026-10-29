@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  linkableFiguresFor,
   matchLinkedTracker,
   matchTracker,
   parseSyncResult,
@@ -158,10 +159,11 @@ describe("parseSyncResult", () => {
   });
 });
 
-describe("linked figure selection (weekly preferred, session supported)", () => {
-  const linked = (metric: "weekly" | "session"): Tracker => ({
+describe("linked figure selection with provider-period guard", () => {
+  const linked = (metric: "weekly" | "session", resetType: Tracker["reset_type"] = "weekly"): Tracker => ({
     ...tracker,
-    id: `t-${metric}`,
+    id: `t-${metric}-${resetType}`,
+    reset_type: resetType,
     external_provider: "claude",
     external_metric: metric,
   });
@@ -175,23 +177,32 @@ describe("linked figure selection (weekly preferred, session supported)", () => 
     observedAt: "2026-10-29T04:00:00.000Z",
   };
 
+  it("linkableFiguresFor pairs only a weekly-reset tracker with the weekly figure", () => {
+    expect(linkableFiguresFor({ reset_type: "weekly" })).toEqual(["weekly"]);
+    expect(linkableFiguresFor({ reset_type: "daily" })).toEqual([]);
+    expect(linkableFiguresFor({ reset_type: "monthly" })).toEqual([]);
+    expect(linkableFiguresFor({ reset_type: "one_time" })).toEqual([]);
+  });
+
   it("matchLinkedTracker prefers the weekly link when both exist", () => {
     const found = matchLinkedTracker([linked("session"), linked("weekly")], "claude");
-    expect(found?.tracker.id).toBe("t-weekly");
+    expect(found?.tracker.id).toBe("t-weekly-weekly");
     expect(found?.figure).toBe("weekly");
   });
 
-  it("matchLinkedTracker falls back to a session link", () => {
-    const found = matchLinkedTracker([linked("session")], "claude");
-    expect(found?.tracker.id).toBe("t-session");
-    expect(found?.figure).toBe("session");
+  it("matchLinkedTracker refuses a session link even when explicitly set (no matching reset type)", () => {
+    expect(matchLinkedTracker([linked("session")], "claude")).toBeNull();
+  });
+
+  it("matchLinkedTracker refuses a weekly link on a daily-reset tracker (stale-usage guard)", () => {
+    expect(matchLinkedTracker([linked("weekly", "daily")], "claude")).toBeNull();
   });
 
   it("matchLinkedTracker returns null without an explicit link", () => {
     expect(matchLinkedTracker([tracker], "claude")).toBeNull();
   });
 
-  it("syncArgsFor uses the session figure and keys by it", () => {
+  it("syncArgsFor stays figure-capable for any figure a caller passes", () => {
     const args = syncArgsFor(linked("session"), reading, "session");
     expect(args?.p_used_amount).toBe(42);
     expect(args?.p_metric).toBe("session");
