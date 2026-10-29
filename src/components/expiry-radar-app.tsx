@@ -63,6 +63,7 @@ import {
   urgencyFor,
 } from "@/lib/expiry-radar";
 import {
+  linkableFiguresFor,
   matchLinkedTracker,
   parseSyncResult,
   parseUsageMessage,
@@ -1819,8 +1820,16 @@ export function TrackerEditorPage({ trackerId }: { trackerId?: string }) {
       timezone: form.timezone,
       cost_value: form.cost_value === "" ? null : Number(form.cost_value),
       notes: form.notes,
-      external_provider: form.external_provider === "" ? null : form.external_provider,
-      external_metric: form.external_provider === "" ? null : form.external_metric,
+      external_provider:
+        form.external_provider === "" ||
+        !linkableFiguresFor({ reset_type: form.reset_type }).includes(form.external_metric)
+          ? null
+          : form.external_provider,
+      external_metric:
+        form.external_provider === "" ||
+        !linkableFiguresFor({ reset_type: form.reset_type }).includes(form.external_metric)
+          ? null
+          : form.external_metric,
     };
     const parsed = trackerSchema.safeParse(raw);
     if (!parsed.success) {
@@ -2090,33 +2099,41 @@ export function TrackerEditorPage({ trackerId }: { trackerId?: string }) {
             </select>
             <p className="text-xs text-muted-foreground">
               Only a tracker you link here ever receives automatic readings, and a reading can only
-              move usage up, never down - your reset schedule still owns the reset. If Claude shows
-              you no usage meters (free plan), there is nothing to sync: the extension just tells
-              you when you hit a limit.
+              move usage up, never down - your reset schedule still owns the reset. Sync reads the
+              usage meters Claude shows on paid plans; if your account has no meters page, there is
+              nothing to sync.
             </p>
           </div>
-          {form.external_provider === "claude" && (
-            <div className="space-y-2">
-              <Label htmlFor="external_metric">Usage figure to sync</Label>
-              <select
-                id="external_metric"
-                value={form.external_metric}
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    external_metric: event.target.value === "session" ? "session" : "weekly",
-                  })
-                }
-                className="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-              >
-                <option value="weekly">Weekly usage</option>
-                <option value="session">Session (5-hour) usage</option>
-              </select>
+          {form.external_provider === "claude" &&
+            (linkableFiguresFor({ reset_type: form.reset_type }).length > 0 ? (
+              <div className="space-y-2">
+                <Label htmlFor="external_metric">Usage figure to sync</Label>
+                <select
+                  id="external_metric"
+                  value={form.external_metric}
+                  onChange={(event) =>
+                    setForm({
+                      ...form,
+                      external_metric: event.target.value === "session" ? "session" : "weekly",
+                    })
+                  }
+                  className="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="weekly">Weekly usage</option>
+                </select>
+                <p className="text-xs text-muted-foreground">
+                  Only the weekly figure is offered: Claude&apos;s weekly limit resets once a week,
+                  the same rhythm as this tracker. The 5-hour session window matches no tracker
+                  reset type, so it stays unlinkable rather than drifting out of sync.
+                </p>
+              </div>
+            ) : (
               <p className="text-xs text-muted-foreground">
-                Pick the figure whose reset rhythm matches this tracker&apos;s own reset schedule.
+                Automatic sync needs this tracker to reset weekly, the same rhythm as Claude&apos;s
+                weekly limit. Change the reset schedule above to weekly, or leave the tracker
+                unlinked - a mismatched schedule would keep stale usage after the provider resets.
               </p>
-            </div>
-          )}
+            ))}
         </div>
         {error && (
           <p role="alert" className="text-sm text-destructive">
