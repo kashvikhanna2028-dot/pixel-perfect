@@ -62,10 +62,22 @@ chrome.runtime.sendMessage({ type: 'get-status' }, (status) => {
     el.append(
       heading(stale ? 'Usage meters (outdated)' : 'Usage meters'),
       row('Provider', String(reading.provider)),
-      row('Session (5h)', reading.sessionPercent != null ? `${reading.sessionPercent}%` : '—'),
-      row('Weekly', reading.weeklyPercent != null ? `${reading.weeklyPercent}%` : '—'),
-      row('Captured', ageText(reading.observedAt)),
     );
+    if (Array.isArray(reading.figures) && reading.figures.length) {
+      for (const f of reading.figures) {
+        const value = f.used != null && f.total != null
+          ? `${f.used} / ${f.total}${f.unit ? ' ' + f.unit : ''}`
+          : (f.percent != null ? `${f.percent}%` : '—');
+        el.append(row(f.metric, value));
+        if (f.resetText) el.append(row('Reset', f.resetText));
+      }
+    } else {
+      el.append(
+        row('Session (5h)', reading.sessionPercent != null ? `${reading.sessionPercent}%` : '—'),
+        row('Weekly', reading.weeklyPercent != null ? `${reading.weeklyPercent}%` : '—'),
+      );
+    }
+    el.append(row('Captured', ageText(reading.observedAt)));
     let syncText;
     if (status.pending) {
       syncText = 'waiting for dashboard tab';
