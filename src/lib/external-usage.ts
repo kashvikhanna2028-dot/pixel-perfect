@@ -46,24 +46,20 @@ export function parseUsageMessage(data: unknown): ExternalUsageReading | null {
 }
 
 /**
- * Finds the tracker a reading applies to. Names carry the intent: a tracker
- * whose name also contains "week" takes the weekly figure, one containing
- * "session" takes the 5-hour session figure. With a single provider match the
- * weekly figure wins, because weekly reset types are what trackers model.
+ * Finds the tracker a reading applies to. A tracker syncs only when the user
+ * explicitly linked it to this provider and metric (external_provider +
+ * external_metric); automatic sync never guesses from tracker names and never
+ * touches a manual tracker.
  */
 export function matchTracker(
   trackers: Tracker[],
   provider: string,
   figure: "weekly" | "session" = "weekly",
 ): Tracker | null {
-  const matches = trackers.filter((t) => t.name.toLowerCase().includes(provider.toLowerCase()));
-  if (matches.length === 0) return null;
-  const keyword = figure === "weekly" ? "week" : "session";
-  const specific = matches.filter((t) => t.name.toLowerCase().includes(keyword));
-  if (specific.length === 1) return specific[0] ?? null;
-  if (specific.length > 1) return null; // ambiguous, refuse to guess
-  if (figure === "weekly" && matches.length === 1) return matches[0] ?? null;
-  return null;
+  const linked = trackers.filter(
+    (t) => t.external_provider === provider.toLowerCase() && t.external_metric === figure,
+  );
+  return linked.length === 1 ? (linked[0] ?? null) : null;
 }
 
 /**
@@ -85,10 +81,22 @@ export function usedAmountFor(tracker: Tracker, reading: ExternalUsageReading): 
 export function syncArgsFor(
   tracker: Tracker,
   reading: ExternalUsageReading,
-): { p_tracker_id: string; p_used_amount: number; p_external_key: string } | null {
+): {
+  p_tracker_id: string;
+  p_used_amount: number;
+  p_external_key: string;
+  p_provider: string;
+  p_metric: "weekly" | "session";
+} | null {
   const used = usedAmountFor(tracker, reading);
   if (used === null) return null;
-  return { p_tracker_id: tracker.id, p_used_amount: used, p_external_key: readingKey(reading) };
+  return {
+    p_tracker_id: tracker.id,
+    p_used_amount: used,
+    p_external_key: readingKey(reading),
+    p_provider: reading.provider,
+    p_metric: "weekly",
+  };
 }
 
 export type SyncResult = {
