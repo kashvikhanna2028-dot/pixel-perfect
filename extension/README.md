@@ -15,20 +15,22 @@ comparable usage meter for it.
 
 ## How syncing works
 
+Provider readings are saved as timestamped **snapshots**, never merged into
+a tracker's numbers. A provider's reset boundary is text on its page ("Resets
+Friday 10:30 PM"), not something the app can enforce, so the provider's
+figures stay alongside your tracker and your tracker's own reset schedule
+alone owns its math. Percentages are stored verbatim with their unit - they
+are never converted into your tracker's credits.
+
 1. You link a tracker to a provider and figure in the tracker's settings
-   (Automatic sync → Claude → Weekly). Only a tracker with a weekly reset
-   schedule can be linked: it is the only reset type that matches a figure
-   Claude shows. The 5-hour session figure is deliberately not linkable -
-   no Expiry Radar reset type matches it, so writing it into a tracker
-   would desynchronize the tracker's own reset math. Manual trackers are
-   never touched, and trackers are never matched by name.
+   (Automatic sync → Claude → Weekly or Session). Linking is a display
+   association only. Manual trackers are never touched, and trackers are
+   never matched by name.
 2. When your Expiry Radar dashboard is open in a tab, a captured reading is
    handed to the page, which saves it with your existing signed-in session
-   through the `apply_external_usage_reading` database function. That
-   function locks the tracker row, rejects a reading it has already applied,
-   and only ever writes an increase - a decrease means the provider reset
-   first, and your own reset schedule catches up. Nothing is written
-   backwards or twice.
+   through the `record_external_usage_snapshot` database function. That
+   function records the snapshot once (a stable key rejects retries and
+   duplicate deliveries) and changes nothing else.
 3. The popup shows what happened: "saved to dashboard" means the database
    confirmed the write; "not saved" or "waiting for dashboard tab" means it
    did not. Delivery and saving are reported separately on purpose.
@@ -74,8 +76,6 @@ comparable usage meter for it.
   dashboard shows "automatic sync is in preview" and saves nothing.
 - The reader is text-pattern based. Anthropic can change the page layout;
   if numbers stop appearing, the parser needs an update.
-- The session (5-hour) meter figure is shown in the popup for information
-  but cannot be linked to a tracker (see How syncing works).
 - Not yet verified against a live signed-in Claude account - first run on
   your own account is the real test.
 - Chrome desktop only.
