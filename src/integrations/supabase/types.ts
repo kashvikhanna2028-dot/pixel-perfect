@@ -267,6 +267,8 @@ export type Database = {
           cost_value: number | null
           created_at: string
           expires_at: string | null
+          external_metric: string | null
+          external_provider: string | null
           id: string
           name: string
           next_reset_at: string | null
@@ -285,6 +287,8 @@ export type Database = {
           cost_value?: number | null
           created_at?: string
           expires_at?: string | null
+          external_metric?: string | null
+          external_provider?: string | null
           id?: string
           name: string
           next_reset_at?: string | null
@@ -303,6 +307,8 @@ export type Database = {
           cost_value?: number | null
           created_at?: string
           expires_at?: string | null
+          external_metric?: string | null
+          external_provider?: string | null
           id?: string
           name?: string
           next_reset_at?: string | null
@@ -363,6 +369,8 @@ export type Database = {
           p_tracker_id: string
           p_used_amount: number
           p_external_key: string
+          p_provider?: string
+          p_metric?: string
         }
         Returns: Json
       }
