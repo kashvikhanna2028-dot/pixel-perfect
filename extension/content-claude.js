@@ -4,9 +4,12 @@
 // No credentials, cookies or tokens are read or sent anywhere.
 
 (function () {
+  // Verified against the real Settings > Usage layout (Oct 2026): the
+  // session row is labelled "Current session", the weekly row "This week".
+  // "weekly" stays as a fallback for older/other layouts.
   const LABELS = {
     session: /current session/i,
-    weekly: /weekly/i,
+    weekly: /this week|weekly/i,
   };
 
   function percentNear(el) {
@@ -41,22 +44,28 @@
   }
 
   function findSection(labelRe) {
-    // Smallest element whose own text matches the label, then walk up to a
-    // container that also contains a percent or progressbar.
+    // Standalone short labels ("This week", "Current session") are
+    // authoritative; prose that merely mentions the words (the "Fresh week.
+    // 9% of your weekly limit used." banner, "Cloud session credits") is a
+    // fallback only. Walk up from the label to a container with a percent.
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
     let node;
-    const candidates = [];
+    const shortCandidates = [];
+    const looseCandidates = [];
     while ((node = walker.nextNode())) {
       const own = (node.innerText || '').trim();
       if (own.length > 400) continue;
-      if (labelRe.test(own)) candidates.push(node);
+      if (!labelRe.test(own)) continue;
+      (own.length <= 30 ? shortCandidates : looseCandidates).push(node);
     }
-    // Prefer the deepest (most specific) candidate that yields a percent.
-    for (let i = candidates.length - 1; i >= 0; i--) {
-      let el = candidates[i];
-      for (let depth = 0; depth < 4 && el; depth++, el = el.parentElement) {
-        const pct = percentNear(el);
-        if (pct !== null) return { el, pct };
+    for (const candidates of [shortCandidates, looseCandidates]) {
+      // Prefer the deepest (most specific) candidate that yields a percent.
+      for (let i = candidates.length - 1; i >= 0; i--) {
+        let el = candidates[i];
+        for (let depth = 0; depth < 4 && el; depth++, el = el.parentElement) {
+          const pct = percentNear(el);
+          if (pct !== null) return { el, pct };
+        }
       }
     }
     return null;
