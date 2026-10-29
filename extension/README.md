@@ -20,9 +20,10 @@ OpenAI does not show a comparable usage meter for it.
 3. The popup shows what happened: "saved to dashboard" means the database
    confirmed the write; "not saved" or "waiting for dashboard tab" means it
    did not. Delivery and saving are reported separately on purpose.
-4. Syncing matches **one** tracker whose name contains the provider name
-   (e.g. "Claude Pro"). The built-in "Claude Pro" preset works: weekly reset,
-   total 100. If no tracker (or several) matches, the reading is shown as a
+4. Syncing writes only to a tracker you **explicitly link** to the provider
+   and metric (e.g. provider "claude", metric "weekly") in the tracker's
+   settings. Trackers are never matched by name, and manual trackers are
+   never touched. If no linked tracker exists, the reading is shown as a
    toast and nothing is saved.
 
 ## What it never does
