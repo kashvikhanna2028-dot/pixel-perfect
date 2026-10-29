@@ -88,6 +88,44 @@ describe("content-claude parser (fixture DOM)", () => {
     expect(reading?.weeklyPercent).toBe(23);
   });
 
+  it("matches the real Settings > Usage layout (labels from a live screenshot)", () => {
+    // Mirrors the observed page: banner prose mentioning "weekly", a
+    // "Current session" row, a "This week" row, and unrelated credit
+    // sections that must not leak into the session reading.
+    document.body.innerHTML = `
+      <main>
+        <h2>Your usage</h2>
+        <p>Fresh week. 9% of your weekly limit used.</p>
+        <section>
+          <div><span>Current session</span>
+            <div role="progressbar" aria-valuenow="13" aria-valuemin="0" aria-valuemax="100"></div>
+            <span>13% used</span><p>Resets at 2:00 PM</p></div>
+          <div><span>This week</span>
+            <div role="progressbar" aria-valuenow="9" aria-valuemin="0" aria-valuemax="100"></div>
+            <span>9% used</span><p>Resets Friday 10:30 PM</p></div>
+        </section>
+        <section><h3>Cloud session credits</h3>
+          <div><span>Included credit</span><span>$100 of $100 left</span></div></section>
+        <section><h3>Usage credits</h3><span>$0</span></section>
+      </main>`;
+    const reading = loadParser().find((m) => m.type === "usage-reading")?.reading;
+    expect(reading?.sessionPercent).toBe(13);
+    expect(reading?.weeklyPercent).toBe(9);
+    expect(String(reading?.sessionReset)).toMatch(/Resets at 2:00 PM/i);
+    expect(String(reading?.weeklyReset)).toMatch(/Resets Friday 10:30 PM/i);
+  });
+
+  it("ignores the banner prose when no labelled rows exist yet", () => {
+    // Banner mentions "weekly" and a percent but is not a labelled row; with
+    // nothing else on the page the loose fallback may read it, so this test
+    // pins the opposite case: labelled rows win over the banner.
+    document.body.innerHTML = `
+      <p>Fresh week. 55% of your weekly limit used.</p>
+      <div><span>This week</span><span>9% used</span><p>Resets Friday</p></div>`;
+    const reading = loadParser().find((m) => m.type === "usage-reading")?.reading;
+    expect(reading?.weeklyPercent).toBe(9);
+  });
+
   it("sends nothing on a page without usage data", () => {
     document.body.innerHTML = `<main><p>Nothing here</p></main>`;
     expect(loadParser().find((m) => m.type === "usage-reading")).toBeUndefined();
