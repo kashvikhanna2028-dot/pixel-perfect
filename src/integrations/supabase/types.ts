@@ -321,6 +321,7 @@ export type Database = {
       usage_logs: {
         Row: {
           amount: number
+          external_key: string | null
           id: string
           logged_at: string
           tracker_id: string
@@ -328,6 +329,7 @@ export type Database = {
         }
         Insert: {
           amount: number
+          external_key?: string | null
           id?: string
           logged_at?: string
           tracker_id: string
@@ -335,6 +337,7 @@ export type Database = {
         }
         Update: {
           amount?: number
+          external_key?: string | null
           id?: string
           logged_at?: string
           tracker_id?: string
@@ -355,6 +358,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      apply_external_usage_reading: {
+        Args: {
+          p_tracker_id: string
+          p_used_amount: number
+          p_external_key: string
+        }
+        Returns: Json
+      }
       advance_subscription_date: {
         Args: { anchor: string; cycle: string; d: string; days: number }
         Returns: string
