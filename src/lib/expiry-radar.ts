@@ -19,6 +19,10 @@ export type Tracker = {
   notes: string;
   next_reset_at: string | null;
   created_at: string;
+  // Explicit opt-in link to an external provider metric (set by the user);
+  // automatic sync never touches a tracker without both fields.
+  external_provider?: string | null;
+  external_metric?: string | null;
 };
 
 export type TrackerDraft = Omit<Tracker, "id" | "user_id" | "created_at">;
