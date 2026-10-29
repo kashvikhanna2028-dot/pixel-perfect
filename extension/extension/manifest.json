@@ -1,0 +1,42 @@
+{
+  "manifest_version": 3,
+  "name": "Expiry Radar Companion",
+  "version": "0.1.0",
+  "description": "Reads AI plan usage you can already see on claude.ai and syncs it to your Expiry Radar dashboard. Private test build.",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://claude.ai/*",
+    "https://exptrack.site/*",
+    "https://life-expiry-guide.lovable.app/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://claude.ai/settings/usage*"
+      ],
+      "js": [
+        "content-claude.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://exptrack.site/dashboard*",
+        "https://life-expiry-guide.lovable.app/dashboard*"
+      ],
+      "js": [
+        "content-exptrack.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Expiry Radar Companion"
+  }
+}
