@@ -364,13 +364,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      apply_external_usage_reading: {
+      record_external_usage_snapshot: {
         Args: {
-          p_tracker_id: string
-          p_used_amount: number
+          p_tracker_id: string | null
+          p_provider: string
+          p_metric: string
+          p_percent: number | null
+          p_used_amount: number | null
+          p_total_amount: number | null
+          p_unit: string | null
+          p_reset_text: string | null
+          p_observed_at: string
           p_external_key: string
-          p_provider?: string
-          p_metric?: string
         }
         Returns: Json
       }
